@@ -1,7 +1,12 @@
 import axios from 'axios'
 
-const API_BASE_URL = process.env.VUE_APP_API_URL || 'http://localhost:3000/api'
+const isLocalhost =
+  window.location.hostname === "localhost" ||
+  window.location.hostname === "127.0.0.1";
 
+const API_BASE_URL = isLocalhost
+  ? "http://localhost:3000/api"
+  : "http://10.113.178.55:3000/api";
 const apiClient = axios.create({
   baseURL: API_BASE_URL,
   timeout: 10000,
@@ -96,6 +101,7 @@ export const lookupAPI = {
   getOfficeLocations: ()     => apiClient.get('/lookups/org/office-locations'),
   getPayGrades:       ()     => apiClient.get('/lookups/org/pay-grades'),
   getShifts:          ()     => apiClient.get('/lookups/org/shifts'),
+  getEmploymentTypes: ()     => apiClient.get('/lookups/employment-types'),  // ← ADD THIS
 }
 
 export default apiClient
