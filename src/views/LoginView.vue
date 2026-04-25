@@ -116,6 +116,7 @@
 </template>
 
 <script>
+import { useAuthStore } from '@/stores/authStore'
 import logo from '@/assets/logo.svg'
 import { authAPI } from '@/services/api'   // ✅ IMPORT API
 
@@ -153,64 +154,55 @@ export default {
 
     // ✅ LOGIN CONNECTED TO BACKEND
     async handleSignIn() {
-      this.errorMessage = '';
+  this.errorMessage = '';
 
-      try {
-        const email = this.email.trim().toLowerCase();
-        const password = this.password.trim();
+  const auth = useAuthStore(); // ✅ use pinia
 
-        const res = await authAPI.login(email, password);
+  try {
+    const email = this.email.trim().toLowerCase();
+    const password = this.password.trim();
 
-        const { access_token, refresh_token, user } = res.data;
+    const res = await authAPI.login(email, password);
 
-        // ✅ STORE TOKENS
-        sessionStorage.setItem('hrms_token', access_token);
-        localStorage.setItem('hrms_token', access_token);
-        localStorage.setItem('refresh_token', refresh_token);
+    const { access_token, refresh_token, user } = res.data;
 
-        // ✅ STORE USER DATA
-        sessionStorage.setItem('hrms_role', user.role);
-        sessionStorage.setItem('user_email', user.email);
-          console.log("LOGIN USER:", user)
+    // ✅ USE PINIA STORE (IMPORTANT CHANGE)
+    auth.login({ access_token, refresh_token, user });
 
-        if (user.employeeCode) {
-      sessionStorage.setItem('employeeCode', user.employeeCode)
-        }
+    console.log("LOGIN USER:", user);
 
-        // ✅ FIRST LOGIN CHECK
-        if (user.isFirstLogin) {
-          sessionStorage.setItem('resetUser', user.email);
-          this.$router.push('/change-password');
-          return;
-        }
+    // ✅ FIRST LOGIN CHECK
+    if (user.isFirstLogin) {
+      this.$router.push('/change-password');
+      return;
+    }
 
-        // ✅ ROLE BASED ROUTING
-        if (user.role === 'admin') {
-          this.$router.push('/dashboard');
-        } else {
-          this.$router.push('/user/dashboard');
-        }
+    // ✅ ROLE BASED ROUTING
+    if (auth.isAdmin) {
+      this.$router.push('/dashboard');
+    } else {
+      this.$router.push('/user/dashboard');
+    }
 
-      } catch (err) {
-        console.log(err);
+  } catch (err) {
+    console.log(err);
 
-        if (err.response?.status === 401) {
-          this.errorMessage = "Invalid email or password";
-        } 
-        else if (err.response?.status === 403) {
-          this.errorMessage = err.response.data?.error || "Access denied";
+    if (err.response?.status === 401) {
+      this.errorMessage = "Invalid email or password";
+    } 
+    else if (err.response?.status === 403) {
+      this.errorMessage = err.response.data?.error || "Access denied";
 
-          // 🔥 HANDLE FIRST LOGIN FROM BACKEND
-          if (err.response.data?.error?.includes("Password change required")) {
-            this.isResetMode = true;
-            this.resetEmail = this.email;
-          }
-        }
-        else {
-          this.errorMessage = "Login failed. Try again.";
-        }
+      if (err.response.data?.error?.includes("Password change required")) {
+        this.isResetMode = true;
+        this.resetEmail = this.email;
       }
-    },
+    }
+    else {
+      this.errorMessage = "Login failed. Try again.";
+    }
+  }
+},
 
     // ✅ CHANGE PASSWORD (CONNECTED)
   async handlePasswordReset() {

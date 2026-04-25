@@ -1,3 +1,4 @@
+import { useAuthStore } from '@/stores/authStore'
 import axios from 'axios'
 
 const API_BASE_URL = process.env.VUE_APP_API_URL || 'http://localhost:3000/api'
@@ -11,45 +12,43 @@ const apiClient = axios.create({
 apiClient.interceptors.response.use(
   response => response,
   async error => {
-    const originalRequest = error.config;
+    const auth = useAuthStore()
+    const originalRequest = error.config
 
     if (error.response?.status === 401 && !originalRequest._retry) {
-      originalRequest._retry = true;
-      try {
-        const refreshToken = localStorage.getItem("refresh_token") || sessionStorage.getItem("refresh_token");
+      originalRequest._retry = true
 
-        console.log("REFRESH TOKEN:", refreshToken); // 🔥 DEBUG
+      try {
+        const refreshToken = auth.refreshToken
 
         const res = await axios.post(
           "http://localhost:3000/api/auth/refresh",
           {
-            refresh_token: refreshToken   // ✅ FIX HERE
+            refresh_token: refreshToken
           }
-        );
+        )
 
-        const newAccessToken = res.data.access_token;
+        const newAccessToken = res.data.access_token
 
-        // ✅ SAVE NEW TOKEN
-        sessionStorage.setItem("hrms_token", newAccessToken);
-        localStorage.setItem("hrms_token", newAccessToken);
+        // ✅ update token via pinia
+        auth.setToken(newAccessToken)
 
-        // ✅ RETRY REQUEST
-        originalRequest.headers.Authorization = `Bearer ${newAccessToken}`;
-        return apiClient(originalRequest);
+        // ✅ retry request
+        originalRequest.headers.Authorization = `Bearer ${newAccessToken}`
+        return apiClient(originalRequest)
 
       } catch (err) {
-        console.error("Refresh failed:", err);
+        console.error("Refresh failed:", err)
 
-        sessionStorage.clear();
-        localStorage.clear();
-        window.location.href = "/login";
+        // ✅ logout via pinia
+        auth.logout()
+        window.location.href = "/login"
       }
     }
 
-    return Promise.reject(error);
+    return Promise.reject(error)
   }
-);
-
+)
 export const authAPI = {
   login:          (email, password)    => apiClient.post('/auth/login',           { email, password }),
   logout:         (refresh_token)      => apiClient.post('/auth/logout',          { refresh_token }),

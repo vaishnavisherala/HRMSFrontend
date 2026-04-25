@@ -1,4 +1,6 @@
+import { pinia } from '@/main'
 import { createRouter, createWebHashHistory } from 'vue-router'
+import { useAuthStore } from '../stores/authStore'  // ← NEW
 
 // Admin views
 import LoginView      from '../views/LoginView.vue'
@@ -58,11 +60,11 @@ const routes = [
     component: UserDashboardView,
     meta: { role: 'employee' }
   },
- {
-  path: '/user/profile',
-  component: () => import('@/views/user/UserEmployeeProfile.vue'),
-  meta: { role: 'employee' }
-},
+  {
+    path: '/user/profile',
+    component: () => import('@/views/user/UserEmployeeProfile.vue'),
+    meta: { role: 'employee' }
+  },
   {
     path: '/user/attendance',
     component: UserAttendanceView,
@@ -90,29 +92,36 @@ const router = createRouter({
   routes,
 })
 
-// ✅ ROUTE GUARD (FIXED)
+// ── Route Guard ──────────────────────────────────────────
 router.beforeEach((to, from, next) => {
-  const role = sessionStorage.getItem('hrms_role')
+  const auth = useAuthStore(pinia)
+
+  const isPublic = to.path === '/login' || to.path === '/change-password'
 
   // ✅ Allow public pages
-  if (to.path === '/login' || to.path === '/change-password') {
-    next()
+  if (isPublic) {
+    // Already logged in? Skip login page, go straight to dashboard
+    if (auth.isAuthenticated && to.path === '/login') {
+      next(auth.isAdmin ? '/dashboard' : '/user/dashboard')
+    } else {
+      next()
+    }
     return
   }
 
-  // ❌ Not logged in
-  if (!role) {
+  // ❌ Not logged in → send to login
+  if (!auth.isAuthenticated) {
     next('/login')
     return
   }
 
-  // ❌ Wrong role
-  if (to.meta.role && to.meta.role !== role) {
-    next(role === 'admin' ? '/dashboard' : '/user/dashboard')
+  // ❌ Wrong role → redirect to correct dashboard
+  if (to.meta.role && to.meta.role !== auth.role) {
+    next(auth.isAdmin ? '/dashboard' : '/user/dashboard')
     return
   }
 
-  // ✅ Allow
+  // ✅ All checks passed
   next()
 })
 

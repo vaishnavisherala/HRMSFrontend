@@ -126,6 +126,7 @@
 </template>
 
 <script>
+import { useAuthStore } from '@/stores/authStore'
 import { jwtDecode } from 'jwt-decode'
 
 export default {
@@ -180,89 +181,77 @@ export default {
   },
 
   methods: {
-    // ── Load user info from stored JWT ──────────────────────────────
-    loadUserFromToken() {
-      const token = sessionStorage.getItem('hrms_token') || localStorage.getItem('hrms_token')
-      if (!token) return
-      try {
-        const decoded = jwtDecode(token)
+  loadUserFromToken() {
+    const auth = useAuthStore()
+    const token = auth.token
 
-        // Keycloak puts full name in `name`, or compose from given/family
-        const fullName = decoded.name
-          || `${decoded.given_name || ''} ${decoded.family_name || ''}`.trim()
-          || decoded.preferred_username
-          || 'User'
+    if (!token) return
 
-         this.currentUser.name     = fullName
-this.currentUser.email    = decoded.email || decoded.preferred_username || ''
-this.currentUser.initials = fullName
-  .split(' ')
-  .map(w => w[0])
-  .join('')
-  .toUpperCase()
-  .slice(0, 2)
+    try {
+      const decoded = jwtDecode(token)
 
-        // Role from Keycloak realm_access
-        const roles = decoded.realm_access?.roles || []
-        this.currentUser.role = roles.includes('admin')
-  ? 'HR Administrator'
-  : roles.includes('employee')
-  ? 'Employee'
-  : decoded.preferred_username || 'User'
-      } catch (e) {
-        console.error('Token decode failed:', e)
-      }
-    },
+      const fullName =
+        decoded.name ||
+        `${decoded.given_name || ''} ${decoded.family_name || ''}`.trim() ||
+        decoded.preferred_username ||
+        'User'
 
-    // ── Popup toggle ─────────────────────────────────────────────────
-    toggleUserMenu() {
-       this.showUserMenu = !this.showUserMenu
-    },
+      this.currentUser.name = fullName
+      this.currentUser.email = decoded.email || decoded.preferred_username || ''
 
-    handleOutsideClick(e) {
-      if (this.$refs.userWrap && !this.$refs.userWrap.contains(e.target)) {
-       this.showUserMenu = false
-     }
-    },
+      this.currentUser.initials = fullName
+        .split(' ')
+        .map(w => w[0])
+        .join('')
+        .toUpperCase()
+        .slice(0, 2)
 
-    goToProfile() {
-      this.showLogout = false
-      this.$router.push('/profile')
-    },
+      const roles = decoded.realm_access?.roles || []
 
-    confirmLogout() {
-      this.showLogout = false
-      this.showLogoutModal = true
-    },
+      this.currentUser.role = roles.includes('admin')
+        ? 'HR Administrator'
+        : roles.includes('employee')
+        ? 'Employee'
+        : 'User'
 
-    // ── Full logout: backend → localStorage → Keycloak ───────────────
-    async logout() {
-      this.loggingOut = true
-      const token = sessionStorage.getItem('hrms_token') || localStorage.getItem('hrms_token')
-
-      // 1. Invalidate session on backend (optional but recommended)
-      try {
-        await fetch('http://localhost:3000/api/auth/logout', {
-          method: 'POST',
-          headers: { Authorization: `Bearer ${token}` }
-        })
-      } catch (_) { /* non-blocking */ }
-
-      // 2. Clear all local storage
-      localStorage.clear()
-      sessionStorage.clear()
-
-      // 3. Redirect to Keycloak logout endpoint
-      //    This ends the SSO session on Keycloak itself
-                this.$router.push('/login');
-
-    },
-
-    toggleSidebar() {
-      this.isSidebarOpen = !this.isSidebarOpen
+    } catch (e) {
+      console.error('Token decode failed:', e)
     }
+  },
+
+  toggleUserMenu() {
+    this.showUserMenu = !this.showUserMenu
+  },
+
+  handleOutsideClick(e) {
+    if (this.$refs.userWrap && !this.$refs.userWrap.contains(e.target)) {
+      this.showUserMenu = false
+    }
+  },
+
+  async logout() {
+    this.loggingOut = true
+
+    const auth = useAuthStore()
+    const token = auth.token
+
+    try {
+      await fetch('http://localhost:3000/api/auth/logout', {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}` }
+      })
+    } catch (err) {
+      console.error('Logout error:',err)
+    }
+
+    auth.logout()
+    this.$router.push('/login')
+  },
+
+  toggleSidebar() {
+    this.isSidebarOpen = !this.isSidebarOpen
   }
-}
+}}
 </script>
 
 <style scoped>
