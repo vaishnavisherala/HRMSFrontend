@@ -465,32 +465,6 @@
             </div>
           </div>
 
-          <!-- Tab: Attendance -->
-          <div v-if="profileTab === 'Attendance'" class="profile-section">
-            <div class="att-summary-row">
-              <div class="att-mini-card green">
-                <p class="amc-label">Present</p>
-                <h4 class="amc-value">22</h4>
-              </div>
-              <div class="att-mini-card red">
-                <p class="amc-label">Absent</p>
-                <h4 class="amc-value">3</h4>
-              </div>
-              <div class="att-mini-card orange">
-                <p class="amc-label">Late</p>
-                <h4 class="amc-value">2</h4>
-              </div>
-            </div>
-            <div class="att-log-list">
-              <div v-for="log in attLogs" :key="log.date" class="att-log-row">
-                <span class="att-log-date">{{ log.date }}</span>
-                <span class="att-log-in">{{ log.in }}</span>
-                <span class="att-log-out">{{ log.out }}</span>
-                <span :class="['att-log-status', log.status.toLowerCase()]">{{ log.status }}</span>
-              </div>
-            </div>
-          </div>
-
           <!-- Tab: Documents -->
           <div v-if="profileTab === 'Documents'" class="profile-section">
             <div class="doc-form-card">
@@ -659,7 +633,7 @@ export default {
 
       // ADD THESE:
     profileTab: 'Info',
-    profileTabs: ['Info', 'Attendance', 'Documents'],
+    profileTabs: ['Info', 'Documents'],
     expandedEmpId: null,
     selectAll: false,
     currentPage: 1,
@@ -688,12 +662,7 @@ export default {
     showDocUrlPreview: false,
 
     // Attendance
-    attLogs: [
-      { date: 'Apr 21', in: '09:02 AM', out: '06:15 PM', status: 'Present' },
-      { date: 'Apr 20', in: '—',        out: '—',        status: 'Absent'  },
-      { date: 'Apr 19', in: '09:45 AM', out: '06:00 PM', status: 'Late'    },
-    ]
-,
+
       form: {
         first_name: '',
         middle_name: '',
