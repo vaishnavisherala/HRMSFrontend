@@ -83,7 +83,8 @@ export const profileAPI = {
 }
 
 export const attendanceAPI = {
-  punch:          (data)         => apiClient.post('/attendance/punch', data),
+  punch:          (data)         => apiClient.post('/attendance/punch-in', data),
+  punchOut:       (data)         => apiClient.post('/attendance/punch-out', data),
   assignShift:    (data)         => apiClient.post('/attendance/assign-shift', data),
   computeSummary: (data)         => apiClient.post('/attendance/compute-summary', data),
   getLogs:        (code, params) => apiClient.get(`/attendance/${code}`, { params }),

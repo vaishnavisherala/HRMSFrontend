@@ -160,7 +160,7 @@ export default {
         const password = this.password.trim();
 
         const res = await authAPI.login(email, password);
-
+        
         const { access_token, refresh_token, user } = res.data;
 
         // ✅ STORE TOKENS
