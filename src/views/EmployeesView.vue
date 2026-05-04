@@ -9,7 +9,7 @@
     </template>
     <div class="content-body">
       <div class="emp-top-box">
-
+      
         <!-- EMPLOYEE STATS -->
         <div class="emp-stats-row">
           <div class="emp-stat-card">
