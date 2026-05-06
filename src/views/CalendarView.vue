@@ -16,7 +16,6 @@
       <div class="ctrl-right">
         <div class="view-tabs">
           <button class="vtab" :class="{ active: view === 'month' }" @click="view = 'month'">Month</button>
-          <button class="vtab" :class="{ active: view === 'week' }"  @click="view = 'week'">Week</button>
           <button class="vtab" :class="{ active: view === 'list' }"  @click="view = 'list'">List</button>
         </div>
         <div class="event-filters">
@@ -100,59 +99,71 @@
 
       <!-- Right Sidebar -->
       <div class="cal-sidebar">
-
-        <!-- Selected day events -->
-        <div class="card sidebar-events">
-          <div class="card-hd">
-            <div>
-              <div class="card-title">{{ selectedDayLabel }}</div>
-              <div class="card-sub">{{ selectedDayEvents.length }} events scheduled</div>
-            </div>
-            <button class="add-sm-btn" @click="openAddModal">+</button>
-          </div>
-          <div class="sd-events">
-            <div v-if="selectedDayEvents.length === 0" class="no-events">
-              <div class="ne-ico">🗓️</div>
-              <div class="ne-txt">No events today</div>
-            </div>
-            <div v-for="ev in selectedDayEvents" :key="ev.id" class="sd-ev" @click="selectedEvent = ev">
-              <div class="sd-ev-bar" :style="{ background: ev.color }"></div>
-              <div class="sd-ev-body">
-                <div class="sd-ev-title">{{ ev.title }}</div>
-                <div class="sd-ev-meta">{{ ev.time }} · {{ ev.location }}</div>
-                <div class="sd-ev-dept">{{ ev.departments }}</div>
-              </div>
-              <button class="sd-del" @click.stop="deleteEvent(ev.id)">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/></svg>
-              </button>
-            </div>
-          </div>
+ 
+  <!-- ── Selected day events ───────────────────────────────────── -->
+  <div class="card sidebar-events">
+    <div class="card-hd">
+      <div>
+        <div class="card-title">{{ selectedDayLabel }}</div>
+        <div class="card-sub">{{ selectedDayEvents.length }} events scheduled</div>
+      </div>
+      <div style="display:flex; gap:6px;">
+        <button class="add-sm-btn" title="Add Event"    @click="openAddModal">+</button>
+      </div>
+    </div>
+    <div class="sd-events">
+      <div v-if="selectedDayEvents.length === 0" class="no-events">
+        <div class="ne-ico">🗓️</div>
+        <div class="ne-txt">No events today</div>
+      </div>
+      <div v-for="ev in selectedDayEvents" :key="ev.id" class="sd-ev" @click="selectedEvent = ev">
+        <div class="sd-ev-bar" :style="{ background: ev.color }"></div>
+        <div class="sd-ev-body">
+          <div class="sd-ev-title">{{ ev.title }}</div>
+          <div class="sd-ev-meta">{{ ev.time }} · {{ ev.location }}</div>
+          <div class="sd-ev-dept">{{ ev.departments }}</div>
         </div>
+        <button class="sd-del" @click.stop="deleteEvent(ev.id)">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
+            <polyline points="3 6 5 6 21 6"/>
+            <path d="M19 6l-1 14H6L5 6"/>
+          </svg>
+        </button>
+      </div>
+    </div>
+  </div>
 
         <!-- Upcoming events -->
         <div class="card">
-          <div class="card-hd">
-            <div class="card-title">Upcoming</div>
-            <button class="card-link">All →</button>
-          </div>
-          <div class="upcoming-list">
-            <div v-for="ev in upcomingEvents" :key="ev.id" class="up-row">
-              <div class="up-dot" :style="{ background: ev.color }"></div>
-              <div class="up-body">
-                <div class="up-title">{{ ev.title }}</div>
-                <div class="up-date">{{ ev.day }} {{ ev.month }} · {{ ev.time }}</div>
-              </div>
-              <span class="up-tag" :style="{ background: ev.color + '22', color: ev.color }">{{ ev.type }}</span>
-            </div>
-          </div>
+    <div class="card-hd">
+      <div class="card-title">Upcoming</div>
+      <button class="card-link">All →</button>
+    </div>
+    <div class="upcoming-list">
+      <div v-if="upcomingEvents.length === 0" style="padding:12px 22px; font-size:12px; color:var(--text-3);">
+        No upcoming events
+      </div>
+      <div v-for="ev in upcomingEvents" :key="ev.id" class="up-row">
+        <div class="up-dot" :style="{ background: ev.color }"></div>
+        <div class="up-body">
+          <div class="up-title">{{ ev.title }}</div>
+          <div class="up-date">{{ ev.day }} {{ ev.month }} · {{ ev.time }}</div>
         </div>
+        <span class="up-tag" :style="{ background: ev.color + '22', color: ev.color }">{{ ev.type }}</span>
+      </div>
+    </div>
+  </div>
 
         <!-- Holidays -->
         <div class="card">
           <div class="card-hd">
             <div class="card-title">Public Holidays</div>
-            <div class="card-sub">April 2026</div>
+            <button class="add-sm-btn add-hol-btn" title="Add Holiday" @click="openHolidayModal">+</button>
+
           </div>
+          <div>
+</div>
+
           <div class="hol-list">
             <div v-for="h in holidays" :key="h.name" class="hol-row">
               <div class="hol-date">
@@ -193,6 +204,20 @@
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 00-3-3.87"/></svg>
             <span>{{ selectedEvent.departments }}</span>
           </div>
+          <div v-if="selectedEvent.meetLink" class="ev-detail-row">
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
+    <path d="M10 14L21 3M21 3H15M21 3V9"/>
+    <path d="M14 10v7a2 2 0 01-2 2H5a2 2 0 01-2-2V7a2 2 0 012-2h7"/>
+  </svg>
+
+  <a
+    :href="selectedEvent.meetLink"
+    target="_blank"
+    style="color: #3b82f6; text-decoration: underline;"
+  >
+    Join Meeting
+  </a>
+</div>
           <p class="ev-desc">{{ selectedEvent.desc }}</p>
         </div>
         <div class="modal-ft">
@@ -210,21 +235,99 @@
           <button class="modal-close" @click="showAddModal = false">✕</button>
         </div>
         <div class="modal-body">
-          <div class="mfield"><label>Event Title</label><input type="text" v-model="newEvent.title" placeholder="e.g. Team Standup"></div>
-          <div class="mform-row">
-            <div class="mfield"><label>Date</label><input type="date" v-model="newEvent.date"></div>
-            <div class="mfield"><label>Time</label><input type="time" v-model="newEvent.time"></div>
-          </div>
-          <div class="mform-row">
-            <div class="mfield"><label>Type</label>
-              <select v-model="newEvent.type">
-                <option v-for="t in eventTypes" :key="t.type" :value="t.type">{{ t.label }}</option>
-              </select>
-            </div>
-            <div class="mfield"><label>Location</label><input type="text" v-model="newEvent.location" placeholder="e.g. Conference Room A"></div>
-          </div>
-          <div class="mfield"><label>Departments</label><input type="text" v-model="newEvent.departments" placeholder="e.g. All Departments"></div>
-          <div class="mfield"><label>Description</label><input type="text" v-model="newEvent.desc" placeholder="Brief event description"></div>
+          <div class="mfield">
+  <label>Event Title *</label>
+  <input type="text" v-model="newEvent.title">
+</div>
+
+<div class="mform-row">
+  <div class="mfield">
+    <label>Date *</label>
+    <input type="date" v-model="newEvent.date">
+  </div>
+
+  <div class="mfield">
+    <label>Start Time *</label>
+    <input type="time" v-model="newEvent.startTime">
+  </div>
+
+  <div class="mfield">
+    <label>End Time *</label>
+    <input type="time" v-model="newEvent.endTime">
+  </div>
+</div>
+
+<div class="mform-row">
+  <div class="mfield">
+    <label>Event Type</label>
+    <select v-model="newEvent.type">
+      <option v-for="t in backendEventTypes" :key="t.value" :value="t.value">
+        {{ t.label }}
+      </option>
+    </select>
+  </div>
+
+  <div class="mfield">
+    <label>Visibility</label>
+    <select v-model="newEvent.visibility">
+      <option value="PUBLIC">Public</option>
+      <option value="DEPARTMENT">Department</option>
+    </select>
+  </div>
+</div>
+
+<!-- Department (only if needed) -->
+<div class="mfield" v-if="newEvent.visibility === 'DEPARTMENT'">
+  <label>Department</label>
+  <select v-model="newEvent.departmentId">
+  <option value="">Select</option>
+  <option
+    v-for="d in departments"
+    :key="d.id"
+    :value="d.id"
+  >
+    {{ d.name }}
+  </option>
+</select>
+</div>
+
+<div class="mfield">
+  <label>Meeting Link</label>
+  <input type="text" v-model="newEvent.meetLink">
+</div>
+
+<div class="mfield">
+  <label>Description</label>
+  <input type="text" v-model="newEvent.description">
+</div>
+
+<!-- ✅ RECURRING -->
+<div class="mfield">
+  <label>
+    <input type="checkbox" v-model="newEvent.isRecurring">
+    Recurring Event
+  </label>
+</div>
+
+<div v-if="newEvent.isRecurring">
+
+  <div class="mfield">
+    <label>Repeat Days</label>
+    <select v-model="newEvent.recurrenceDays" multiple>
+      <option value="MO">Mon</option>
+      <option value="TU">Tue</option>
+      <option value="WE">Wed</option>
+      <option value="TH">Thu</option>
+      <option value="FR">Fri</option>
+    </select>
+  </div>
+
+  <div class="mfield">
+    <label>End Date</label>
+    <input type="date" v-model="newEvent.recurrenceEnd">
+  </div>
+
+</div>
         </div>
         <div class="modal-ft">
           <button class="btn-cancel" @click="showAddModal = false">Cancel</button>
@@ -233,123 +336,544 @@
       </div>
     </div>
 
+
+    <div class="modal-overlay" v-if="showHolidayModal" @click.self="closeHolidayModal">
+  <div class="modal">
+    <div class="modal-hd">
+      <div class="modal-title">Add Public Holiday</div>
+      <button class="modal-close" @click="closeHolidayModal">✕</button>
+    </div>
+ 
+    <div class="modal-body">
+      <!-- Error -->
+      <div v-if="holidayError" style="
+        background:rgba(255,207,193,.2);
+        border:1px solid rgba(255,150,130,.4);
+        border-radius:8px; padding:10px 14px;
+        font-size:12px; color:#8a3525; margin-bottom:14px;
+      ">{{ holidayError }}</div>
+ 
+      <div class="mfield">
+        <label>Holiday Name *</label>
+        <input
+          type="text"
+          v-model="newHoliday.name"
+          placeholder="e.g. Diwali"
+        >
+      </div>
+ 
+      <div class="mform-row">
+        <div class="mfield">
+          <label>Date *</label>
+          <input type="date" v-model="newHoliday.date">
+        </div>
+        <div class="mfield">
+          <label>Type *</label>
+          <select v-model="newHoliday.type">
+            <option value="NATIONAL">National Holiday</option>
+            <option value="REGIONAL">Regional Holiday</option>
+            <option value="OPTIONAL">Optional Holiday</option>
+            <option value="COMPANY">Company Holiday</option>
+          </select>
+        </div>
+      </div>
+ 
+      <div class="mfield" v-if="newHoliday.type === 'REGIONAL'">
+        <label>State Code</label>
+        <input
+          type="text"
+          v-model="newHoliday.stateCode"
+          placeholder="e.g. MH for Maharashtra, KA for Karnataka"
+          maxlength="2"
+          style="text-transform:uppercase"
+        >
+        <div style="font-size:11px; color:var(--text-3); margin-top:4px;">
+          Leave blank to apply to all offices
+        </div>
+      </div>
+ 
+      <div class="mfield">
+        <label>Description</label>
+        <input
+          type="text"
+          v-model="newHoliday.description"
+          placeholder="Optional note about this holiday"
+        >
+      </div>
+    </div>
+ 
+    <div class="modal-ft">
+      <button class="btn-cancel" @click="closeHolidayModal">Cancel</button>
+      <button class="btn-save" @click="addHoliday" :disabled="holidaySaving">
+        <span v-if="holidaySaving">Saving…</span>
+        <span v-else>Add Holiday</span>
+      </button>
+    </div>
+  </div>
+</div>
+
   </AdminLayout>
 </template>
 
 <script>
-import AdminLayout from '../components/AdminLayout.vue'
+import AdminLayout   from '../components/AdminLayout.vue'
+import { calendarAPI,lookupAPI } from '../services/api.js'   // ← adjust path to match your project
+
+// ── Map backend eventType → local type key + color ───────────────────────────
+const EVENT_TYPE_MAP = {
+  MEETING:       { type: 'meeting',  color: '#657D65' },
+  TRAINING:      { type: 'training', color: '#9c6f0c' },
+  COMPANY_EVENT: { type: 'review',   color: '#757872' },
+  BIRTHDAY:      { type: 'holiday',  color: '#86d98b' },
+  ANNIVERSARY:   { type: 'holiday',  color: '#86d98b' },
+  REMINDER:      { type: 'deadline', color: '#f0a090' },
+  OTHER:         { type: 'meeting',  color: '#657D65' },
+}
+
+const HOLIDAY_TYPE_LABEL = {
+  NATIONAL: 'National Holiday',
+  REGIONAL: 'Regional Holiday',
+  OPTIONAL: 'Optional Holiday',
+  COMPANY:  'Company Holiday',
+}
+
+// ── Normalize backend event → shape the template expects ─────────────────────
+function normalizeEvent(ev) {
+  const start   = new Date(ev.startTime)
+  const typeMap = EVENT_TYPE_MAP[ev.eventType] || EVENT_TYPE_MAP.OTHER
+
+  const timeStr = ev.isAllDay
+    ? 'All Day'
+    : start.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: true })
+
+  const depts = ev.attendees?.length
+    ? [...new Set(
+        ev.attendees.map(a => a.employee?.department?.name).filter(Boolean)
+      )].join(', ') || 'All Departments'
+    : (ev.department?.name || 'All Departments')
+
+  return {
+    id:          ev.id,
+    title:       ev.title,
+    day:         String(start.getDate()).padStart(2, '0'),
+    month:       start.toLocaleDateString('en-IN', { month: 'short' }).toUpperCase(),
+date: [
+  start.getFullYear(),
+  String(start.getMonth() + 1).padStart(2, '0'),
+  String(start.getDate()).padStart(2, '0'),
+].join('-'),
+    time:        timeStr,
+    location:    ev.location    || '—',
+    departments: depts,
+    type:        typeMap.type,
+    color:       typeMap.color,
+    desc:        ev.description || '',
+    meetLink:    ev.meetLink    || null,
+    visibility:  ev.visibility,
+    status:      ev.status,
+  }
+}
+
+// ── Normalize backend holiday → shape the template expects ────────────────────
+function normalizeHoliday(h) {
+  const dateStr = h.date.split('T')[0]              // "2026-05-01"
+  const [y, m, day] = dateStr.split('-')
+  return {
+    id:    h.id,
+    day:   day,                                      // "01"
+    month: new Date(+y, +m - 1, +day)
+             .toLocaleDateString('en-IN', { month: 'short' })
+             .toUpperCase(),                         // "MAY"
+    date:  dateStr,                                  // "2026-05-01"
+    name:  h.name,
+    type:  HOLIDAY_TYPE_LABEL[h.type] || h.type,
+  }
+}
+
 export default {
   name: 'CalendarView',
   components: { AdminLayout },
+
   data() {
     const today = new Date()
     return {
       today,
-      currentYear: today.getFullYear(),
+      currentYear:  today.getFullYear(),
       currentMonth: today.getMonth(),
-      view: 'month',
-      selectedDay: today.toISOString().split('T')[0],
+      view:         'month',
+      selectedDay:  today.toISOString().split('T')[0],
       selectedEvent: null,
-      showAddModal: false,
-      activeFilter: 'all',
-      dayNames: ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'],
-      newEvent: { title:'', date:'', time:'', type:'meeting', location:'', departments:'', desc:'' },
+      showAddModal:  false,
+      activeFilter:  'all',
+
+      // ── State ────────────────────────────────────────────────────────────
+      loading:    false,
+      saving:     false,
+      deleting:   false,
+      errorMsg:   '',
+      successMsg: '',
+
+      dayNames: ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'],
+
+      // ── New event form ────────────────────────────────────────────────────
+      newEvent: {
+        title: '',
+  date: '',
+  startTime: '',
+  endTime: '',
+  type: 'MEETING',
+  location: '',
+  meetLink: '',
+  description: '',
+  visibility: 'PUBLIC',
+  isAllDay: false,
+  isRecurring: false,
+  recurrenceDays: [],
+  recurrenceEnd: '',
+  departmentId: '',
+  attendeeIds: []
+      },
+
+      showHolidayModal: false,
+holidaySaving: false,
+holidayError: '',
+newHoliday: {
+  name: '',
+  date: '',
+  type: 'NATIONAL',
+  stateCode: '',
+  description: ''
+},
+
+      // ── Data ─────────────────────────────────────────────────────────────
+      events:   [],
+      holidays: [],
+      departments:[],
+
+      // ── Filter chips ──────────────────────────────────────────────────────
       eventTypes: [
-        { type:'meeting',  label:'Meeting',  color:'#657D65' },
-        { type:'holiday',  label:'Holiday',  color:'#86d98b' },
-        { type:'deadline', label:'Deadline', color:'#f0a090' },
-        { type:'training', label:'Training', color:'#9c6f0c' },
-        { type:'review',   label:'Review',   color:'#757872' },
+        { type: 'meeting',  label: 'Meeting',  color: '#657D65' },
+        {type: 'review' ,label:'Review'},
+        { type: 'holiday',  label: 'Holiday',  color: '#86d98b' },
+       
       ],
-      events: [
-        { id:1,  title:'Q1 Review Meeting',      day:'01', month:'APR', date:'2026-04-01', time:'10:00 AM', location:'Board Room',        departments:'All Departments',  type:'review',   color:'#757872', desc:'Quarterly performance and goal review for all departments.' },
-        { id:2,  title:'Design Sprint Kickoff',  day:'03', month:'APR', date:'2026-04-03', time:'09:30 AM', location:'Design Lab',         departments:'Design, Engineering',type:'meeting', color:'#657D65', desc:'Kickoff for the new product design sprint.' },
-        { id:3,  title:'Dr. Ambedkar Jayanti',   day:'14', month:'APR', date:'2026-04-14', time:'All Day',  location:'—',                  departments:'All Staff',        type:'holiday',  color:'#86d98b', desc:'National public holiday.' },
-        { id:4,  title:'App Redesign Deadline',  day:'18', month:'APR', date:'2026-04-18', time:'06:00 PM', location:'—',                  departments:'Engineering, Design',type:'deadline',color:'#f0a090', desc:'Final submission for the mobile app redesign project.' },
-        { id:5,  title:'HR Policy Training',     day:'22', month:'APR', date:'2026-04-22', time:'02:00 PM', location:'Conference Hall B',   departments:'All Staff',        type:'training', color:'#9c6f0c', desc:'Mandatory HR policy and compliance training for all employees.' },
-        { id:6,  title:'Finance Team Sync',      day:'07', month:'APR', date:'2026-04-07', time:'11:00 AM', location:'Meeting Room 2',     departments:'Finance, HR',       type:'meeting',  color:'#657D65', desc:'Monthly finance sync and budget review.' },
-        { id:7,  title:'Marketing Campaign Review',day:'10',month:'APR',date:'2026-04-10', time:'03:00 PM', location:'Marketing Floor',    departments:'Marketing',         type:'review',   color:'#757872', desc:'Review Q2 campaign performance and plan next steps.' },
-        { id:8,  title:'New Employee Orientation',day:'28',month:'MAR', date:'2026-03-28', time:'09:00 AM', location:'Training Room',       departments:'HR & Admin',        type:'training', color:'#9c6f0c', desc:'Onboarding session for new joiners.' },
-        { id:9,  title:'Team Building Event',    day:'25', month:'APR', date:'2026-04-25', time:'04:00 PM', location:'Office Terrace',      departments:'All Departments',   type:'meeting',  color:'#657D65', desc:'Monthly team bonding activity.' },
-      ],
-      holidays: [
-        { day:'01', month:'APR', name:'Good Friday (optional)', type:'Optional Holiday' },
-        { day:'14', month:'APR', name:'Dr. Ambedkar Jayanti',   type:'National Holiday' },
-        { day:'21', month:'APR', name:'Ram Navami',             type:'National Holiday' },
+
+      // ── Backend type options for the modal select ─────────────────────────
+      backendEventTypes: [
+        { value: 'MEETING',       label: 'Meeting'       },
+        { value: 'TRAINING',      label: 'Training'      },
+        { value: 'COMPANY_EVENT', label: 'Company Event' },
+        { value: 'REMINDER',      label: 'Reminder'      },
+        { value: 'OTHER',         label: 'Other'         },
       ],
     }
   },
+
+  async mounted() {
+    await this.fetchMonthData()
+    await this.loadDepartments()   // 👈 ADD THIS
+
+  },
+
+  watch: {
+    currentMonth() { this.fetchMonthData() },
+    currentYear()  { this.fetchMonthData() },
+  },
+
   computed: {
     monthLabel() {
-      return new Date(this.currentYear, this.currentMonth).toLocaleDateString('en-IN', { month:'long', year:'numeric' })
+      return new Date(this.currentYear, this.currentMonth)
+        .toLocaleDateString('en-IN', { month: 'long', year: 'numeric' })
     },
+
     calCells() {
-      const firstDay = new Date(this.currentYear, this.currentMonth, 1).getDay()
+      const firstDay    = new Date(this.currentYear, this.currentMonth, 1).getDay()
       const daysInMonth = new Date(this.currentYear, this.currentMonth + 1, 0).getDate()
       const daysInPrev  = new Date(this.currentYear, this.currentMonth, 0).getDate()
-      const cells = []
+      const todayStr    = this.today.toISOString().split('T')[0]
+      const cells       = []
+
       for (let i = firstDay - 1; i >= 0; i--) {
         const d = daysInPrev - i
-        cells.push({ day: d, currentMonth: false, date: this.formatDate(this.currentYear, this.currentMonth - 1, d), isToday: false })
+        cells.push({
+          day: d, currentMonth: false,
+          date: this.formatDate(this.currentYear, this.currentMonth - 1, d),
+          isToday: false,
+        })
       }
-      const todayStr = this.today.toISOString().split('T')[0]
       for (let d = 1; d <= daysInMonth; d++) {
         const dateStr = this.formatDate(this.currentYear, this.currentMonth, d)
         cells.push({ day: d, currentMonth: true, date: dateStr, isToday: dateStr === todayStr })
       }
       const remaining = 42 - cells.length
       for (let d = 1; d <= remaining; d++) {
-        cells.push({ day: d, currentMonth: false, date: this.formatDate(this.currentYear, this.currentMonth + 1, d), isToday: false })
+        cells.push({
+          day: d, currentMonth: false,
+          date: this.formatDate(this.currentYear, this.currentMonth + 1, d),
+          isToday: false,
+        })
       }
       return cells
     },
+
     filteredEvents() {
-      return this.events.filter(e => this.activeFilter === 'all' || e.type === this.activeFilter)
+      return (this.events || []).filter(e =>
+        this.activeFilter === 'all' || e.type === this.activeFilter
+      )
     },
+
     selectedDayLabel() {
       if (!this.selectedDay) return 'Today'
-      const d = new Date(this.selectedDay + 'T00:00:00')
-      return d.toLocaleDateString('en-IN', { weekday:'long', day:'numeric', month:'long' })
+      return new Date(this.selectedDay + 'T00:00:00')
+        .toLocaleDateString('en-IN', { weekday: 'long', day: 'numeric', month: 'long' })
     },
+
     selectedDayEvents() {
-      return this.events.filter(e => e.date === this.selectedDay)
+      return this.filteredEvents.filter(e => e.date === this.selectedDay)
     },
+
     upcomingEvents() {
       const todayStr = this.today.toISOString().split('T')[0]
-      return this.events.filter(e => e.date >= todayStr).slice(0, 4)
+      return this.filteredEvents.filter(e => e.date >= todayStr).slice(0, 5)
+    },
+
+    // Holidays filtered to current visible month only (for sidebar)
+    monthHolidays() {
+      const m      = String(this.currentMonth + 1).padStart(2, '0')
+      const prefix = `${this.currentYear}-${m}`
+      return this.holidays.filter(h => h.date?.startsWith(prefix))
     },
   },
+
   methods: {
-    formatDate(y, m, d) {
-      const dt = new Date(y, m, d)
-      return dt.toISOString().split('T')[0]
+    // ── FETCH events + holidays for current month ───────────────────────────
+    async fetchMonthData() {
+      this.loading  = true
+      this.errorMsg = ''
+      try {
+        const y    = this.currentYear
+        const m    = String(this.currentMonth + 1).padStart(2, '0')
+        const days = new Date(y, this.currentMonth + 1, 0).getDate()
+        const from = `${y}-${m}-01`
+        const to   = `${y}-${m}-${String(days).padStart(2, '0')}`
+
+        // calendarAPI.getEvents returns { events[], holidays[] }
+        const res = await calendarAPI.getEvents({ from, to })
+
+        this.events   = (res.data.events   || []).map(normalizeEvent)
+        this.holidays = (res.data.holidays || []).map(normalizeHoliday)
+
+      } catch (err) {
+        this.errorMsg = err?.response?.data?.error || 'Failed to load calendar'
+        console.error('[fetchMonthData]', err)
+      } finally {
+        this.loading = false
+      }
     },
-    prevMonth() { if (this.currentMonth === 0) { this.currentMonth = 11; this.currentYear-- } else this.currentMonth-- },
-    nextMonth() { if (this.currentMonth === 11) { this.currentMonth = 0;  this.currentYear++ } else this.currentMonth++ },
-    goToday()   { this.currentYear = this.today.getFullYear(); this.currentMonth = this.today.getMonth(); this.selectedDay = this.today.toISOString().split('T')[0] },
-    cellEvents(date) { return this.filteredEvents.filter(e => e.date === date) },
-    openAddModal() { this.newEvent.date = this.selectedDay; this.showAddModal = true },
-    addEvent() {
-      if (!this.newEvent.title || !this.newEvent.date) return
-      const typeObj = this.eventTypes.find(t => t.type === this.newEvent.type)
-      const d = new Date(this.newEvent.date + 'T00:00:00')
-      this.events.push({
-        id: Date.now(), title: this.newEvent.title,
-        day: String(d.getDate()).padStart(2,'0'),
-        month: d.toLocaleDateString('en-IN',{month:'short'}).toUpperCase(),
-        date: this.newEvent.date, time: this.newEvent.time || 'TBD',
-        location: this.newEvent.location || 'TBD',
-        departments: this.newEvent.departments || 'All Departments',
-        type: this.newEvent.type, color: typeObj?.color || '#657D65',
-        desc: this.newEvent.desc,
-      })
-      this.showAddModal = false
-      this.newEvent = { title:'', date:'', time:'', type:'meeting', location:'', departments:'', desc:'' }
-    },
-    deleteEvent(id) { this.events = this.events.filter(e => e.id !== id) },
+
+    async loadDepartments() {
+  try {
+    const res = await lookupAPI.getDepartments()
+
+    this.departments = res.data   // ✅ CORRECT
+
+    console.log("Departments:", this.departments)
+
+  } catch (err) {
+    console.error("Failed to load departments", err)
   }
+},
+
+    // ── CREATE event ────────────────────────────────────────────────────────
+   async addEvent() {
+  if (!this.newEvent.title || !this.newEvent.date) {
+    this.errorMsg = "Title and date required"
+    return
+  }
+
+  const payload = {
+    title: this.newEvent.title,
+    description: this.newEvent.description || null,
+    eventType: this.newEvent.type,
+    startTime: `${this.newEvent.date}T${this.newEvent.startTime}:00`,
+    endTime: `${this.newEvent.date}T${this.newEvent.endTime}:00`,
+    meetLink: this.newEvent.meetLink || null,
+    visibility: this.newEvent.visibility,
+    isAllDay: false,
+    attendeeIds: this.newEvent.visibility === 'PUBLIC'
+      ? []
+      : this.newEvent.attendeeIds || []
+  }
+
+  // ✅ Department condition
+  if (this.newEvent.visibility === 'DEPARTMENT') {
+    payload.departmentId = Number(this.newEvent.departmentId)
+  }
+
+  // ✅ Recurring condition
+  if (this.newEvent.isRecurring) {
+    payload.isRecurring = true
+    payload.recurrenceRule = `FREQ=WEEKLY;BYDAY=${this.newEvent.recurrenceDays.join(',')}`
+    payload.recurrenceEnd = this.newEvent.recurrenceEnd
+  }
+
+  try {
+    await calendarAPI.createEvent(payload)
+
+    await this.fetchMonthData()   // BEST PRACTICE
+    this.showAddModal = false
+    this.showSuccess("Event created")
+
+  } catch (err) {
+    this.errorMsg = err?.response?.data?.error || "Failed"
+  }
+},
+
+    async addHoliday() {
+  this.holidayError = ''
+
+  // validation
+  if (!this.newHoliday.name || !this.newHoliday.date) {
+    this.holidayError = "Holiday name and date are required"
+    return
+  }
+
+  this.holidaySaving = true
+
+  try {
+    const payload = {
+      name: this.newHoliday.name,
+      date: this.newHoliday.date,
+      type: this.newHoliday.type,
+      stateCode: this.newHoliday.stateCode || null,
+      description: this.newHoliday.description || null
+    }
+
+    const res = await calendarAPI.createHoliday(payload)
+
+    // ✅ update UI instantly
+    const newHol = res.data.holiday || res.data
+
+    this.holidays.push({
+      id: newHol.id,
+      name: newHol.name,
+      type: newHol.type,
+      date: newHol.date.split('T')[0],
+      day: newHol.date.split('T')[0].split('-')[2],
+      month: new Date(newHol.date).toLocaleString('en-IN', { month: 'short' }).toUpperCase()
+    })
+
+    this.closeHolidayModal()
+    this.showSuccess("Holiday added successfully")
+
+  } catch (err) {
+    console.error(err)
+    this.holidayError = err?.response?.data?.error || "Failed to add holiday"
+  } finally {
+    this.holidaySaving = false
+  }
+},
+
+    // ── DELETE / cancel event ───────────────────────────────────────────────
+    async deleteEvent(id) {
+      if (!confirm('Cancel this event? This cannot be undone.')) return
+      this.deleting = true
+      try {
+        await calendarAPI.deleteEvent(id)
+        this.events = this.events.filter(e => e.id !== id)
+        if (this.selectedEvent?.id === id) this.selectedEvent = null
+        this.showSuccess('Event cancelled')
+      } catch (err) {
+        this.errorMsg = err?.response?.data?.error || 'Failed to cancel event'
+        console.error('[deleteEvent]', err)
+      } finally {
+        this.deleting = false
+      }
+    },
+
+    // ── Navigation ──────────────────────────────────────────────────────────
+    prevMonth() {
+      if (this.currentMonth === 0) { this.currentMonth = 11; this.currentYear-- }
+      else this.currentMonth--
+    },
+    nextMonth() {
+      if (this.currentMonth === 11) { this.currentMonth = 0; this.currentYear++ }
+      else this.currentMonth++
+    },
+    goToday() {
+      this.currentYear  = this.today.getFullYear()
+      this.currentMonth = this.today.getMonth()
+      this.selectedDay  = this.today.toISOString().split('T')[0]
+    },
+
+    // ── Helpers ─────────────────────────────────────────────────────────────
+    formatDate(y, m, d) {
+  const dt = new Date(y, m, d)
+  return [
+    dt.getFullYear(),
+    String(dt.getMonth() + 1).padStart(2, '0'),
+    String(dt.getDate()).padStart(2, '0'),
+  ].join('-')
+},
+
+    cellEvents(date) {
+const evs = this.filteredEvents.filter(e => e.date === date)
+
+  const hols = this.holidays
+    .filter(h => h.date === date)
+    .map(h => ({
+      id:    'hol-' + h.id,
+      title: h.name,
+      color: '#e05555',     // red
+      type:  'holiday',
+      date:  h.date,
+    }))
+
+  return [...hols, ...evs]    },
+
+    openAddModal() {
+      this.newEvent.date = this.selectedDay
+      this.errorMsg      = ''
+      this.showAddModal  = true
+    },
+
+    openHolidayModal() {
+  this.showHolidayModal = true
+  this.holidayError = ''
+},
+
+closeHolidayModal() {
+  this.showHolidayModal = false
+  this.resetHolidayForm()
+},
+resetHolidayForm() {
+  this.newHoliday = {
+    name: '',
+    date: '',
+    type: 'NATIONAL',
+    stateCode: '',
+    description: ''
+  }
+},
+
+
+    resetForm() {
+      this.newEvent = {
+        title: '', date: '', startTime: '', endTime: '',
+        type: 'MEETING', location: '', meetLink: '',
+        description: '', visibility: 'PUBLIC',
+        isAllDay: false, attendeeIds: [],
+      }
+    },
+
+    showSuccess(msg) {
+      this.successMsg = msg
+      setTimeout(() => { this.successMsg = '' }, 3000)
+    },
+  },
 }
 </script>
+
 
 <style scoped>
 .cal-controls { display:flex; align-items:center; justify-content:space-between; margin-bottom:20px; flex-wrap:wrap; gap:14px; }
@@ -433,6 +957,8 @@ export default {
 .sd-del:hover { color:#a03020; }
 .sd-del svg { width:13px; height:13px; }
 
+
+
 .upcoming-list { padding:0 22px 16px; display:flex; flex-direction:column; gap:2px; }
 .up-row { display:flex; align-items:center; gap:10px; padding:8px 0; border-bottom:1px solid var(--border); }
 .up-row:last-child { border-bottom:none; }
@@ -463,12 +989,15 @@ export default {
 
 /* Modals */
 .modal-overlay { position:fixed; inset:0; background:rgba(0,0,0,.4); z-index:500; display:flex; align-items:center; justify-content:center; }
-.modal { background:var(--bg-card); border-radius:var(--r-lg); width:500px; max-width:95vw; }
+.modal { background:var(--bg-card); border-radius:var(--r-lg); width:500px; max-width:95vw;  max-height: 90vh;        /* 👈 LIMIT HEIGHT */
+  display: flex;
+  flex-direction: column;  /* 👈 IMPORTANT */
+  overflow: hidden; }
 .modal-hd { display:flex; align-items:center; justify-content:space-between; padding:22px 24px 0; }
 .modal-title { font-family:'Lora',serif; font-size:18px; font-weight:600; color:var(--text-1); }
 .modal-close { background:none; border:none; font-size:16px; color:var(--text-3); cursor:pointer; width:30px; height:30px; border-radius:50%; }
 .modal-close:hover { background:var(--stone-ghost); }
-.modal-body { padding:24px; }
+.modal-body { padding:24px; overflow-y:auto;flex:1}
 .mform-row { display:grid; grid-template-columns:1fr 1fr; gap:14px; }
 .mfield { margin-bottom:16px; }
 .mfield label { display:block; font-size:12px; font-weight:600; color:var(--text-2); margin-bottom:6px; }

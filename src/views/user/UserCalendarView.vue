@@ -177,6 +177,20 @@
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="8" r="4"/><path d="M4 20c0-4 3.6-7 8-7s8 3 8 7"/></svg>
             <span>{{ selectedEvent.departments }}</span>
           </div>
+          <div v-if="selectedEvent.meetLink" class="ev-detail-row">
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
+    <path d="M10 14L21 3M21 3H15M21 3V9"/>
+    <path d="M14 10v7a2 2 0 01-2 2H5a2 2 0 01-2-2V7a2 2 0 012-2h7"/>
+  </svg>
+
+  <a
+    :href="selectedEvent.meetLink"
+    target="_blank"
+    style="color: #3b82f6; text-decoration: underline;"
+  >
+    Join Meeting
+  </a>
+</div>
           <div v-if="selectedEvent.desc" class="em-desc">{{ selectedEvent.desc }}</div>
           <button class="em-close-btn" @click="selectedEvent = null">Close</button>
         </div>
@@ -218,9 +232,81 @@
 
 <script>
 import UserLayout from '../../components/UserLayout.vue'
+import { calendarAPI } from '@/services/api'
+
+// ✅ Normalize event
+function normalizeEvent(ev) {
+const start = new Date(ev.startTime)
+  return {
+    id: ev.id,
+    title: ev.title,
+date: new Intl.DateTimeFormat('en-CA', {
+  timeZone: 'Asia/Kolkata',
+  year: 'numeric',
+  month: '2-digit',
+  day: '2-digit'
+}).format(start),    month: start.toLocaleDateString('en-IN', { month: 'short' }).toUpperCase(),
+    time: ev.isAllDay
+      ? 'All Day'
+      : start.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' }),
+    location: ev.location || '—',
+    departments: ev.department?.name || 'All',
+    type: ev.eventType?.toLowerCase() || 'meeting',
+    color: getColor(ev.eventType),
+    desc: ev.description || '',
+    meetLink: ev.meetLink || null
+
+  }
+}
+
+// ✅ Normalize holiday
+function normalizeHoliday(h) {
+
+  // ✅ India timezone safe parsing
+  const d = new Date(h.date)
+
+  const indiaDate = new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'Asia/Kolkata',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit'
+  }).format(d)
+
+  const [year, month, day] = indiaDate.split('-')
+
+  return {
+    id: h.id,
+
+    day,
+
+    month: new Intl.DateTimeFormat('en-IN', {
+      timeZone: 'Asia/Kolkata',
+      month: 'short'
+    }).format(d).toUpperCase(),
+
+    name: h.name,
+
+    type: h.type,
+
+    date: `${year}-${month}-${day}`
+  }
+}
+
+// ✅ Color mapping
+function getColor(type) {
+  const map = {
+    MEETING: '#657D65',
+    COMPANY_EVENT: '#757872',
+    TRAINING: '#c07b30',
+    REMINDER: '#e05a4a'
+  }
+  return map[type] || '#657D65'
+}
+
 export default {
   name: 'CalendarView',
   components: { UserLayout },
+
   data() {
     const today = new Date()
     return {
@@ -232,95 +318,173 @@ export default {
       selectedEvent: null,
       showAddModal: false,
       activeFilter: 'all',
+
       dayNames: ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'],
-      newEv: { title: '', date: '', time: '', type: 'meeting' },
-      eventTypes: [
-        { type: 'meeting',  label: 'Meeting',  color: '#657D65' },
-        { type: 'holiday',  label: 'Holiday',  color: '#4caf72' },
-        { type: 'deadline', label: 'Deadline', color: '#e05a4a' },
-        { type: 'training', label: 'Training', color: '#c07b30' },
-        { type: 'review',   label: 'Review',   color: '#757872' },
-      ],
-      events: [
-        { id:1, title:'Q1 Review Meeting',       day:'01', month:'APR', date:'2026-04-01', time:'10:00 AM', location:'Board Room',      departments:'All Departments',     type:'review',   color:'#757872', desc:'Quarterly performance review.' },
-        { id:2, title:'Design Sprint Kickoff',   day:'03', month:'APR', date:'2026-04-03', time:'09:30 AM', location:'Design Lab',       departments:'Design, Engineering', type:'meeting',  color:'#657D65', desc:'Kickoff for new product sprint.' },
-        { id:3, title:'Dr. Ambedkar Jayanti',    day:'14', month:'APR', date:'2026-04-14', time:'All Day',  location:'—',               departments:'All Staff',           type:'holiday',  color:'#4caf72', desc:'National public holiday.' },
-        { id:4, title:'App Redesign Deadline',   day:'18', month:'APR', date:'2026-04-18', time:'06:00 PM', location:'—',               departments:'Engineering, Design', type:'deadline', color:'#e05a4a', desc:'Final submission for redesign.' },
-        { id:5, title:'HR Policy Training',      day:'22', month:'APR', date:'2026-04-22', time:'02:00 PM', location:'Conference Hall', departments:'All Staff',           type:'training', color:'#c07b30', desc:'Mandatory HR policy training.' },
-        { id:6, title:'Team Standup',            day:'28', month:'MAR', date:'2026-03-28', time:'09:15 AM', location:'Meeting Room 3',  departments:'Design',              type:'meeting',  color:'#657D65', desc:'Daily standup.' },
-        { id:7, title:'Portfolio Review',        day:'07', month:'APR', date:'2026-04-07', time:'03:00 PM', location:'Main Studio',     departments:'Design',              type:'review',   color:'#757872', desc:'Review Q1 design portfolio.' },
-      ],
-      holidays: [
-        { day: '14', month: 'APR', name: 'Dr. Ambedkar Jayanti', type: 'National Holiday' },
-        { day: '21', month: 'APR', name: 'Ram Navami',            type: 'National Holiday' },
-        { day: '01', month: 'MAY', name: 'Maharashtra Day',       type: 'State Holiday' },
-      ]
+
+      // ❌ remove static
+      events: [],
+      holidays: [],
+
+      loading: false,
+      errorMsg: ''
     }
   },
+
   computed: {
     monthLabel() {
-      return new Date(this.currentYear, this.currentMonth).toLocaleDateString('en-IN', { month: 'long', year: 'numeric' })
+      return new Date(this.currentYear, this.currentMonth)
+        .toLocaleDateString('en-IN', { month: 'long', year: 'numeric' })
     },
+
     calCells() {
       const firstDay = new Date(this.currentYear, this.currentMonth, 1).getDay()
       const daysInMonth = new Date(this.currentYear, this.currentMonth + 1, 0).getDate()
-      const daysInPrev  = new Date(this.currentYear, this.currentMonth, 0).getDate()
-      const todayStr = this.today.toISOString().split('T')[0]
+      const daysInPrev = new Date(this.currentYear, this.currentMonth, 0).getDate()
+const todayStr = new Intl.DateTimeFormat('en-CA', {
+  timeZone: 'Asia/Kolkata',
+  year: 'numeric',
+  month: '2-digit',
+  day: '2-digit'
+}).format(this.today)
       const cells = []
+
       for (let i = firstDay - 1; i >= 0; i--) {
         cells.push({ day: daysInPrev - i, currentMonth: false, date: '', isToday: false })
       }
+
       for (let d = 1; d <= daysInMonth; d++) {
         const dt = new Date(this.currentYear, this.currentMonth, d)
-        const dateStr = dt.toISOString().split('T')[0]
-        cells.push({ day: d, currentMonth: true, date: dateStr, isToday: dateStr === todayStr })
+const dateStr = new Intl.DateTimeFormat('en-CA', {
+  timeZone: 'Asia/Kolkata',
+  year: 'numeric',
+  month: '2-digit',
+  day: '2-digit'
+}).format(dt)
+        cells.push({
+          day: d,
+          currentMonth: true,
+          date: dateStr,
+          isToday: dateStr === todayStr
+        })
       }
+
       while (cells.length < 42) {
-        cells.push({ day: cells.length - firstDay - daysInMonth + 1, currentMonth: false, date: '', isToday: false })
+        cells.push({ day: '', currentMonth: false })
       }
+
       return cells
     },
+
     filteredEvents() {
       if (this.activeFilter === 'all') return this.events
       return this.events.filter(e => e.type === this.activeFilter)
     },
+
     selectedDayLabel() {
-      if (!this.selectedDay) return 'Today'
       const d = new Date(this.selectedDay + 'T00:00:00')
-      return d.toLocaleDateString('en-IN', { weekday: 'long', day: 'numeric', month: 'long' })
+      return d.toLocaleDateString('en-IN', {
+        weekday: 'long',
+        day: 'numeric',
+        month: 'long'
+      })
     },
-    selectedDayEvents() { return this.events.filter(e => e.date === this.selectedDay) },
+
+    selectedDayEvents() {
+      return this.events.filter(e => e.date === this.selectedDay)
+    },
+
     upcomingEvents() {
       const todayStr = this.today.toISOString().split('T')[0]
       return this.events.filter(e => e.date >= todayStr).slice(0, 4)
-    },
+    }
   },
+
   methods: {
-    formatDate(y, m, d) { return new Date(y, m, d).toISOString().split('T')[0] },
-    prevMonth() { if (this.currentMonth === 0) { this.currentMonth = 11; this.currentYear-- } else this.currentMonth-- },
-    nextMonth() { if (this.currentMonth === 11) { this.currentMonth = 0; this.currentYear++ } else this.currentMonth++ },
-    goToday()   { this.currentYear = this.today.getFullYear(); this.currentMonth = this.today.getMonth(); this.selectedDay = this.today.toISOString().split('T')[0] },
-    cellEvents(date) { return date ? this.filteredEvents.filter(e => e.date === date) : [] },
-    addEvent() {
-      if (!this.newEv.title || !this.newEv.date) return
-      const typeObj = this.eventTypes.find(t => t.type === this.newEv.type)
-      const d = new Date(this.newEv.date + 'T00:00:00')
-      this.events.push({
-        id: Date.now(), title: this.newEv.title,
-        day: String(d.getDate()).padStart(2,'0'),
-        month: d.toLocaleDateString('en-IN', { month: 'short' }).toUpperCase(),
-        date: this.newEv.date, time: this.newEv.time || 'TBD',
-        location: 'TBD', departments: 'My Calendar',
-        type: this.newEv.type, color: typeObj?.color || '#657D65', desc: ''
-      })
-      this.showAddModal = false
-      this.newEv = { title: '', date: '', time: '', type: 'meeting' }
+    prevMonth() {
+      if (this.currentMonth === 0) {
+        this.currentMonth = 11
+        this.currentYear--
+      } else this.currentMonth--
     },
+
+    nextMonth() {
+      if (this.currentMonth === 11) {
+        this.currentMonth = 0
+        this.currentYear++
+      } else this.currentMonth++
+    },
+
+    goToday() {
+      this.currentYear = this.today.getFullYear()
+      this.currentMonth = this.today.getMonth()
+      this.selectedDay = this.today.toISOString().split('T')[0]
+    },
+
+    cellEvents(date) {
+if (!date) return []
+
+  // ✅ normal events
+  const events = this.filteredEvents.filter(e => e.date === date)
+
+  // ✅ holidays
+  const holidays = this.holidays
+    .filter(h => h.date === date)
+    .map(h => ({
+      id: 'h-' + h.id,
+      title: h.name,
+      color: '#e05a4a',   // 🔥 red
+      isHoliday: true
+    }))
+
+  return [...holidays, ...events]    },
+
+    // ✅ MAIN API CALL
+    async fetchCalendarData() {
+      this.loading = true
+
+      try {
+        const y = this.currentYear
+        const m = String(this.currentMonth + 1).padStart(2, '0')
+        const lastDay = new Date(y, this.currentMonth + 1, 0).getDate()
+
+        const from = `${y}-${m}-01`
+        const to = `${y}-${m}-${lastDay}`
+
+        const res = await calendarAPI.getEvents({ from, to })
+
+        this.events = (res.data.events || []).map(normalizeEvent)
+        this.holidays = (res.data.holidays || []).map(normalizeHoliday)
+
+      } catch (err) {
+        console.error(err)
+        this.errorMsg = "Failed to load calendar"
+      } finally {
+        this.loading = false
+      }
+    }
+  },
+
+  // ✅ LOAD ON START
+  async mounted() {
+    await this.fetchCalendarData()
+  },
+
+  // ✅ AUTO REFRESH
+  watch: {
+    currentMonth() {
+      this.fetchCalendarData()
+    },
+    currentYear() {
+      this.fetchCalendarData()
+    }
   }
 }
 </script>
 
 <style scoped>
+
+.ev-detail-row svg { width:15px; height:15px; color:var(--text-3); flex-shrink:0; }
+
 .card { background: #fff; border-radius: var(--r-xl); border: 1px solid #e8ece4; }
 .card-title { font-family: var(--font-serif); font-size: 17px; color: #1e261f; }
 
@@ -336,7 +500,7 @@ export default {
 .nav-btn svg { width: 14px; height: 14px; color: var(--forest); }
 .cal-month-lbl { font-family: var(--font-serif); font-size: 20px; color: #1e261f; min-width: 200px; text-align: center; }
 .today-btn {
-  padding: 6px 14px; background: var(--forest-dk); color: #fff;
+  padding: 6px 14px; background: var(--forest); color: #fff;
   border: none; border-radius: 20px; font-size: 12px; font-weight: 600; font-family: var(--font-sans);
   cursor: pointer; transition: background .18s;
 }
@@ -348,7 +512,7 @@ export default {
   padding: 5px 14px; border-radius: 20px; border: none; background: transparent;
   font-size: 12.5px; font-weight: 500; color: var(--stone); cursor: pointer; transition: all .18s; font-family: var(--font-sans);
 }
-.vtab.active { background: var(--forest-dk); color: #fff; font-weight: 600; }
+.vtab.active { background: var(--forest-dk);  font-weight: 600; }
 
 .type-filters { display: flex; gap: 6px; flex-wrap: wrap; }
 .tf-btn {
@@ -458,16 +622,45 @@ export default {
 .holidays-card { padding: 20px; }
 .hol-list { display: flex; flex-direction: column; gap: 10px; }
 .hol-row  { display: flex; align-items: center; gap: 12px; }
+/* 🔥 RED HOLIDAY STYLE */
 .hol-date-box {
-  width: 38px; height: 42px; background: rgba(169,233,173,.25);
-  border-radius: var(--r-sm); display: flex; flex-direction: column;
-  align-items: center; justify-content: center; flex-shrink: 0;
+  width: 38px;
+  height: 42px;
+  background: rgba(224, 90, 74, 0.15);   /* light red */
+  border-radius: var(--r-sm);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
 }
-.hol-day { font-family: var(--font-serif); font-size: 16px; color: var(--forest-dk); line-height: 1; }
-.hol-mon { font-size: 8px; font-weight: 700; text-transform: uppercase; letter-spacing: .5px; color: var(--forest); margin-top: 2px; }
-.hol-name { font-size: 12.5px; font-weight: 600; color: #1e261f; }
-.hol-type { font-size: 11px; color: var(--stone); margin-top: 1px; }
 
+.hol-day {
+  font-family: var(--font-serif);
+  font-size: 16px;
+  color: #e05a4a;   /* red */
+  line-height: 1;
+}
+
+.hol-mon {
+  font-size: 8px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: .5px;
+  color: #e05a4a;   /* red */
+  margin-top: 2px;
+}
+
+.hol-name {
+  font-size: 12.5px;
+  font-weight: 600;
+  color: #e05a4a;   /* red highlight */
+}
+
+.hol-type {
+  font-size: 11px;
+  color: #b94a3a;   /* darker red */
+  margin-top: 1px;
+}
 /* Modals */
 .modal-overlay {
   position: fixed; inset: 0; background: rgba(0,0,0,.32); z-index: 500;

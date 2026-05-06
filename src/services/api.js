@@ -92,6 +92,58 @@ export const attendanceAPI = {
   regularize:     (logId, data)  => apiClient.put(`/attendance/regularize/${logId}`, data),
 }
 
+// ── Calendar API ──────────────────────────────────────────────────────────────
+export const calendarAPI = {
+  // ── Holidays ────────────────────────────────────────────────────────────────
+  // GET /api/calendar/holidays?year=2026&month=5
+  getHolidays:   (params)      => apiClient.get('/calendar/holidays', { params }),
+ 
+  // POST /api/calendar/holidays  (admin only)
+  createHoliday: (data)        => apiClient.post('/calendar/holidays', data),
+ 
+  // PUT /api/calendar/holidays/:id  (admin only)
+  updateHoliday: (id, data)    => apiClient.put(`/calendar/holidays/${id}`, data),
+ 
+  // DELETE /api/calendar/holidays/:id  (admin only)
+  deleteHoliday: (id)          => apiClient.delete(`/calendar/holidays/${id}`),
+ 
+  // ── Events ──────────────────────────────────────────────────────────────────
+  // GET /api/calendar/events?from=2026-05-01&to=2026-05-31
+  getEvents:     (params)      => apiClient.get('/calendar/events', { params }),
+ 
+  // GET /api/calendar/events/:id
+  getEventById:  (id)          => apiClient.get(`/calendar/events/${id}`),
+ 
+  // POST /api/calendar/events
+  createEvent:   (data)        => apiClient.post('/calendar/events', data),
+ 
+  // PUT /api/calendar/events/:id
+  updateEvent:   (id, data)    => apiClient.put(`/calendar/events/${id}`, data),
+ 
+  // DELETE /api/calendar/events/:id  (soft cancel)
+  deleteEvent:   (id)          => apiClient.delete(`/calendar/events/${id}`),
+ 
+  // ── Attendees / RSVP ────────────────────────────────────────────────────────
+  // PUT /api/calendar/events/:id/rsvp  body: { rsvpStatus }
+  rsvp:          (id, status)  => apiClient.put(`/calendar/events/${id}/rsvp`, { rsvpStatus: status }),
+ 
+  // POST /api/calendar/events/:id/invite  body: { employeeIds[] }
+  invite:        (id, empIds)  => apiClient.post(`/calendar/events/${id}/invite`, { employeeIds: empIds }),
+ 
+  // ── Views ───────────────────────────────────────────────────────────────────
+  // GET /api/calendar/my-calendar?from=...&to=...
+  getMyCalendar: (params)      => apiClient.get('/calendar/my-calendar', { params }),
+ 
+  // GET /api/calendar/team-view?from=...&to=...&departmentId=...
+  getTeamView:   (params)      => apiClient.get('/calendar/team-view', { params }),
+ 
+  // GET /api/calendar/upcoming?days=7&limit=10
+  getUpcoming:   (params)      => apiClient.get('/calendar/upcoming', { params }),
+ 
+  // GET /api/calendar/admin/overview?year=2026&month=5  (admin only)
+  getAdminOverview: (params)   => apiClient.get('/calendar/admin/overview', { params }),
+}
+
 export const lookupAPI = {
   getByCode:          (code) => apiClient.get(`/lookups/${code}`),
   getCountries:       ()     => apiClient.get('/lookups/geo/countries'),

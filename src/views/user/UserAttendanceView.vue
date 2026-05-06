@@ -152,60 +152,7 @@
     </div>
 
     <!-- ── Recent Records Table ────────────────────────────────── -->
-    <div class="card records-card">
-      <div class="card-head" style="margin-bottom:0; padding-bottom:0">
-        <div class="card-title">Recent Records</div>
-        <div class="rec-filters">
-          <button
-            v-for="f in filters"
-            :key="f"
-            class="rfbtn"
-            :class="{ active: activeFilter === f }"
-            @click="activeFilter = f"
-          >{{ f }}</button>
-        </div>
-      </div>
-
-      <div v-if="recordsLoading" class="loading-row">
-        <span class="spinner"></span> Loading attendance records…
-      </div>
-
-      <div v-else class="rec-table-wrap">
-        <table class="rec-table">
-          <thead>
-            <tr>
-              <th>Date</th><th>Check In</th><th>Check Out</th>
-              <th>Hours</th><th>Status</th><th>Note</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr v-if="filteredRecords.length === 0">
-              <td colspan="6" class="empty-row">No records found</td>
-            </tr>
-            <tr v-for="r in filteredRecords" :key="r.id || r.date">
-              <td class="rt-date">
-                <span class="rt-day">{{ r.day }}</span>
-                <span class="rt-datelbl">{{ r.date }}</span>
-              </td>
-              <td class="rt-time" :class="r.isLate ? 'late' : ''">
-                {{ r.checkIn || '—' }}
-                <span v-if="r.isLate" class="late-chip">+{{ r.lateByMinutes }}m</span>
-              </td>
-              <td class="rt-time">{{ r.checkOut || '—' }}</td>
-              <td>
-                <span class="rt-hours" :class="hoursClass(r.hours)">
-                  {{ r.hours != null ? r.hours + 'h' : '—' }}
-                </span>
-              </td>
-              <td>
-                <span class="rt-status" :class="statusClass(r.status)">{{ r.status }}</span>
-              </td>
-              <td class="rt-note">{{ r.note || '—' }}</td>
-            </tr>
-          </tbody>
-        </table>
-      </div>
-    </div>
+    
 
     <!-- ── Toast ──────────────────────────────────────────────── -->
     <transition name="toast">
