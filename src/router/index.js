@@ -94,35 +94,49 @@ const router = createRouter({
 
 // ── Route Guard ──────────────────────────────────────────
 router.beforeEach((to, from, next) => {
+
   const auth = useAuthStore(pinia)
 
-  const isPublic = to.path === '/login' || to.path === '/change-password'
+  const isPublic =
+    to.path === '/login' ||
+    to.path === '/change-password'
 
-  // ✅ Allow public pages
+  /* PUBLIC ROUTES */
   if (isPublic) {
-    // Already logged in? Skip login page, go straight to dashboard
+
+    // already logged in
     if (auth.isAuthenticated && to.path === '/login') {
-      next(auth.isAdmin ? '/dashboard' : '/user/dashboard')
-    } else {
-      next()
+
+      // prevent redirect loop
+      if (auth.isAdmin && to.path !== '/dashboard') {
+        return next('/dashboard')
+      }
+
+      if (!auth.isAdmin && to.path !== '/user/dashboard') {
+        return next('/user/dashboard')
+      }
     }
-    return
+
+    return next()
   }
 
-  // ❌ Not logged in → send to login
+  /* NOT LOGGED IN */
   if (!auth.isAuthenticated) {
-    next('/login')
-    return
+    return next('/login')
   }
 
-  // ❌ Wrong role → redirect to correct dashboard
+  /* WRONG ROLE */
   if (to.meta.role && to.meta.role !== auth.role) {
-    next(auth.isAdmin ? '/dashboard' : '/user/dashboard')
-    return
+
+    if (auth.isAdmin) {
+      return next('/dashboard')
+    }
+
+    return next('/user/dashboard')
   }
 
-  // ✅ All checks passed
-  next()
+  /* SUCCESS */
+  return next()
 })
 
 export default router

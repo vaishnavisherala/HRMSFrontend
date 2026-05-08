@@ -1,8 +1,13 @@
 import { useAuthStore } from '@/stores/authStore'
 import axios from 'axios'
 
-const API_BASE_URL = process.env.VUE_APP_API_URL || 'http://localhost:3000/api'
+const isLocalhost =
+  window.location.hostname === "localhost" ||
+  window.location.hostname === "127.0.0.1";
 
+const API_BASE_URL = isLocalhost
+  ? "http://localhost:3000/api"
+  : "http://10.202.32.55:3000/api";
 const apiClient = axios.create({
   baseURL: API_BASE_URL,
   timeout: 10000,
@@ -77,12 +82,44 @@ export const profileAPI = {
 }
 
 export const attendanceAPI = {
-  punch:          (data)         => apiClient.post('/attendance/punch', data),
+  punch:          (data)         => apiClient.post('/attendance/punch-in', data),
+  punchOut:       (data)         => apiClient.post('/attendance/punch-out', data),
   assignShift:    (data)         => apiClient.post('/attendance/assign-shift', data),
   computeSummary: (data)         => apiClient.post('/attendance/compute-summary', data),
   getLogs:        (code, params) => apiClient.get(`/attendance/${code}`, { params }),
   getSummary:     (code, params) => apiClient.get(`/attendance/summary/${code}`, { params }),
   regularize:     (logId, data)  => apiClient.put(`/attendance/regularize/${logId}`, data),
+}
+
+// ── Calendar API ──────────────────────────────────────────────────────────────
+export const calendarAPI = {
+  // Holidays
+  getHolidays:   (params)   => apiClient.get('/calendar/holidays', { params }),
+  createHoliday: (data)     => apiClient.post('/calendar/holidays', data),
+  updateHoliday: (id, data) => apiClient.put(`/calendar/holidays/${id}`, data),
+  deleteHoliday: (id)       => apiClient.delete(`/calendar/holidays/${id}`),
+ 
+  // Events
+  getEvents:    (params)    => apiClient.get('/calendar/events', { params }),
+  getEventById: (id)        => apiClient.get(`/calendar/events/${id}`),
+  createEvent:  (data)      => apiClient.post('/calendar/events', data),
+  updateEvent:  (id, data)  => apiClient.put(`/calendar/events/${id}`, data),
+  deleteEvent:  (id)        => apiClient.delete(`/calendar/events/${id}`),
+ 
+  // Attendees / RSVP
+  rsvp:   (id, status) => apiClient.put(`/calendar/events/${id}/rsvp`, { rsvpStatus: status }),
+  invite: (id, empIds) => apiClient.post(`/calendar/events/${id}/invite`, { employeeIds: empIds }),
+ 
+  // Notifications
+  getNotifications:      ()   => apiClient.get('/calendar/notifications'),
+  markNotificationRead:  (id) => apiClient.put(`/calendar/notifications/${id}/read`),
+  markAllRead:           ()   => apiClient.put('/calendar/notifications/read-all'),
+ 
+  // Views
+  getMyCalendar:    (params) => apiClient.get('/calendar/my-calendar',    { params }),
+  getTeamView:      (params) => apiClient.get('/calendar/team-view',      { params }),
+  getUpcoming:      (params) => apiClient.get('/calendar/upcoming',        { params }),
+  getAdminOverview: (params) => apiClient.get('/calendar/admin/overview',  { params }),
 }
 
 export const lookupAPI = {
@@ -95,6 +132,7 @@ export const lookupAPI = {
   getOfficeLocations: ()     => apiClient.get('/lookups/org/office-locations'),
   getPayGrades:       ()     => apiClient.get('/lookups/org/pay-grades'),
   getShifts:          ()     => apiClient.get('/lookups/org/shifts'),
+  getEmploymentTypes: ()     => apiClient.get('/lookups/employment-types'),  // ← ADD THIS
 }
 
 export default apiClient

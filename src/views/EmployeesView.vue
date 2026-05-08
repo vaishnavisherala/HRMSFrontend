@@ -9,7 +9,7 @@
     </template>
     <div class="content-body">
       <div class="emp-top-box">
-
+      
         <!-- EMPLOYEE STATS -->
         <div class="emp-stats-row">
           <div class="emp-stat-card">
@@ -174,16 +174,10 @@
                 <div class="emp-detail-row"><span class="emp-detail-k">Department</span><span class="emp-detail-v">{{ emp.department_name || emp.dept || '—' }}</span></div>
                 <div class="emp-detail-row"><span class="emp-detail-k">Designation</span><span class="emp-detail-v">{{ emp.designation_name || emp.role || '—' }}</span></div>
                 <div class="emp-detail-row"><span class="emp-detail-k">Employment Type</span><span class="emp-detail-v">{{ emp.employment_type_lkp_name || '—' }}</span></div>
-                <div class="emp-detail-row"><span class="emp-detail-k">Pay Grade</span><span class="emp-detail-v">{{ emp.pay_grade_name || '—' }}</span></div>
                 <div class="emp-detail-row"><span class="emp-detail-k">Office Location</span><span class="emp-detail-v">{{ emp.office_location_name || '—' }}</span></div>
                 <div class="emp-detail-row"><span class="emp-detail-k">DOB</span><span class="emp-detail-v">{{ emp.date_of_birth || emp.dob || '—' }}</span></div>
                 <div class="emp-detail-row"><span class="emp-detail-k">DOJ</span><span class="emp-detail-v">{{ emp.date_of_joining || emp.joinDate || '—' }}</span></div>
-                <div class="emp-detail-row"><span class="emp-detail-k">Probation End</span><span class="emp-detail-v">{{ emp.probation_end_date || '—' }}</span></div>
-                <div class="emp-detail-row"><span class="emp-detail-k">Confirmation</span><span class="emp-detail-v">{{ emp.confirmation_date || '—' }}</span></div>
-                <div class="emp-detail-row"><span class="emp-detail-k">Reporting Manager</span><span class="emp-detail-v">{{ emp.reporting_manager_name || '—' }}</span></div>
                 <div class="emp-detail-row"><span class="emp-detail-k">Is Active</span><span class="emp-detail-v">{{ emp.is_active === false ? 'No' : 'Yes' }}</span></div>
-                <div class="emp-detail-row"><span class="emp-detail-k">Last Working Date</span><span class="emp-detail-v">{{ emp.last_working_date || '—' }}</span></div>
-                <div class="emp-detail-row"><span class="emp-detail-k">Separation Reason</span><span class="emp-detail-v">{{ emp.separation_reason || '—' }}</span></div>
               </div>
 
               <div class="emp-card-actions">
@@ -278,11 +272,21 @@
           <div v-if="currentStep === 2" class="step-card">
             <div class="step-title">Employment Details</div>
             <div class="form-grid">
+              
               <div class="form-field">
-                <label class="field-label">Employee Code *</label>
-                <input v-model="form.employee_code" class="form-input" placeholder="TE-001" />
-                <div v-if="errors.employee_code" class="err-msg">Required</div>
-              </div>
+                <label class="field-label">Employeement Type</label>
+<select v-model="form.employmentTypeLkpId" class="form-input">
+  <option value="">Select</option>
+  <option 
+    v-for="e in employmentTypeOptions" 
+    :key="e.id" 
+    :value="e.id"
+  >
+    {{ e.label }}
+  </option>
+</select>             
+
+</div>
               <div class="form-field">
                 <label class="field-label">Department *</label>
                 <select v-model="form.department_id" class="form-input">
@@ -300,14 +304,7 @@
                 <div v-if="errors.designation_id" class="err-msg">Required</div>
               </div>
               
-              <div class="form-field">
-                <label class="field-label">Pay Grade *</label>
-                <select v-model="form.pay_grade_id" class="form-input">
-                  <option value="">Select</option>
-                  <option v-for="p in payGradeOptions" :key="p.id" :value="p.id">{{ p.name }}</option>
-                </select>
-                <div v-if="errors.pay_grade_id" class="err-msg">Required</div>
-              </div>
+              
              
             </div>
           </div>
@@ -322,14 +319,6 @@
                 <div v-if="errors.date_of_joining" class="err-msg">Required</div>
               </div>
              
-              <div class="form-field full-width">
-                <label class="field-label">Reporting Manager *</label>
-                <select v-model="form.reporting_manager_id" class="form-input">
-                  <option value="">Select</option>
-                  <option v-for="m in managerOptions" :key="m.id" :value="m.id">{{ m.name }}</option>
-                </select>
-                <div v-if="errors.reporting_manager_id" class="err-msg">Required</div>
-              </div>
             </div>
           </div>
 
@@ -448,15 +437,7 @@
               </div>
               <div class="info-row">
                 <span class="info-label">Employment Type</span>
-                <span class="info-value">{{ selectedEmp.employmentType_name || selectedEmp.employmentTypeLkpId || '—' }}</span>
-              </div>
-              <div class="info-row">
-                <span class="info-label">Pay Grade</span>
-                <span class="info-value">{{ selectedEmp.pay_grade_name || '—' }}</span>
-              </div>
-              <div class="info-row">
-                <span class="info-label">Office Location</span>
-                <span class="info-value">{{ selectedEmp.office_location_name || '—' }}</span>
+  <span class="info-value">{{ selectedEmp.employmentType_name || '—' }}</span>
               </div>
 
               <div class="info-row">
@@ -467,59 +448,19 @@
                 <span class="info-label">Date of Birth</span>
                 <span class="info-value">{{ selectedEmp.date_of_birth || selectedEmp.dob || '—' }}</span>
               </div>
-              <div class="info-row">
-                <span class="info-label">Probation End Date</span>
-                <span class="info-value">{{ selectedEmp.probation_end_date || '—' }}</span>
-              </div>
-              <div class="info-row">
-                <span class="info-label">Confirmation Date</span>
-                <span class="info-value">{{ selectedEmp.confirmation_date || '—' }}</span>
-              </div>
-              <div class="info-row">
-                <span class="info-label">Reporting Manager</span>
-                <span class="info-value">{{ selectedEmp.reporting_manager_name || '—' }}</span>
-              </div>
+             
+             
 
               <div class="info-row">
                 <span class="info-label">Status</span>
                 <span class="info-value">{{ selectedEmp.is_active === false ? 'Inactive' : (selectedEmp.status || 'Active') }}</span>
               </div>
 
-              <div class="info-row">
-                <span class="info-label">Last Working Date</span>
-                <span class="info-value">{{ selectedEmp.last_working_date || '—' }}</span>
-              </div>
              
 
               <div class="info-row full">
                 <span class="info-label">Address</span>
                 <span class="info-value">{{ selectedEmp.address || '—' }}</span>
-              </div>
-            </div>
-          </div>
-
-          <!-- Tab: Attendance -->
-          <div v-if="profileTab === 'Attendance'" class="profile-section">
-            <div class="att-summary-row">
-              <div class="att-mini-card green">
-                <p class="amc-label">Present</p>
-                <h4 class="amc-value">22</h4>
-              </div>
-              <div class="att-mini-card red">
-                <p class="amc-label">Absent</p>
-                <h4 class="amc-value">3</h4>
-              </div>
-              <div class="att-mini-card orange">
-                <p class="amc-label">Late</p>
-                <h4 class="amc-value">2</h4>
-              </div>
-            </div>
-            <div class="att-log-list">
-              <div v-for="log in attLogs" :key="log.date" class="att-log-row">
-                <span class="att-log-date">{{ log.date }}</span>
-                <span class="att-log-in">{{ log.in }}</span>
-                <span class="att-log-out">{{ log.out }}</span>
-                <span :class="['att-log-status', log.status.toLowerCase()]">{{ log.status }}</span>
               </div>
             </div>
           </div>
@@ -689,9 +630,10 @@ export default {
       currentStep: 0,
       errors: {},
 
+
       // ADD THESE:
     profileTab: 'Info',
-    profileTabs: ['Info', 'Attendance', 'Documents'],
+    profileTabs: ['Info', 'Documents'],
     expandedEmpId: null,
     selectAll: false,
     currentPage: 1,
@@ -720,23 +662,19 @@ export default {
     showDocUrlPreview: false,
 
     // Attendance
-    attLogs: [
-      { date: 'Apr 21', in: '09:02 AM', out: '06:15 PM', status: 'Present' },
-      { date: 'Apr 20', in: '—',        out: '—',        status: 'Absent'  },
-      { date: 'Apr 19', in: '09:45 AM', out: '06:00 PM', status: 'Late'    },
-    ]
-,
+
       form: {
         first_name: '',
         middle_name: '',
         last_name: '',
         personal_email: '',
         phone_primary: '',
-
+        employmentType_name:'',
+         employmentTypeLkpId: '', 
         department_id: '',
         designation_id: '',
         pay_grade_id: '',
-
+        date_of_birth:'',
         date_of_joining: '',
         reporting_manager_id: ''
       },
@@ -744,7 +682,8 @@ export default {
 
       departmentOptions: [],
       designationOptions: [],
-      payGradeOptions: []
+      payGradeOptions: [],
+      employmentTypeOptions: []
     }
   },
 
@@ -838,15 +777,9 @@ export default {
       dept: emp.department?.name || "—",
       role: emp.designation?.name || emp.user?.role?.name || "—",
 
-      employmentType_name: emp.employmentTypeLkpId == 1 
-                                ? "Full Time" 
-                                : emp.employmentTypeLkpId == 2
-                                    ? "Intern"
-                                    : emp.employmentTypeLkpId == 3
-                                        ? "Part Time"
-                                        : emp.employmentTypeLkpId == 4
-                                             ? "Contract Based"
-                                             : "Other",
+       // ✅ Use label for display, code available if you need logic
+  employmentType_name: emp.employmentType?.label || '—',
+  employmentType_code: emp.employmentType?.code  || '—',
       
       joinDate: emp.createdAt
         ? new Date(emp.createdAt).toLocaleDateString()
@@ -934,7 +867,7 @@ fillWidth() { /* computed below */
       fetch("http://localhost:3000/api/lookups/org/departments", { headers }),
       fetch("http://localhost:3000/api/lookups/org/designations", { headers }),
       fetch("http://localhost:3000/api/lookups/org/pay-grades", { headers }),
-      fetch("http://localhost:3000/api/lookups/employment-types", { headers }) // ← add your actual endpoint
+      fetch("http://localhost:3000/api/lookups/EMP_TYPE", { headers }) // ← add your actual endpoint
 
     ])
     // 🔥 DEBUG
@@ -956,9 +889,10 @@ fillWidth() { /* computed below */
     this.departmentOptions = deptData || []
     this.designationOptions = desigData || []
     this.payGradeOptions = payData || []
-    this.employmentTypeOptions = empTypeData || []  // ← store it
 
+this.employmentTypeOptions = empTypeData.values || []
 
+console.log('Employment types loaded:', this.employmentTypeOptions)
   } catch (err) {
     console.error("Lookup error:", err)
   }
@@ -1009,8 +943,11 @@ async doDelete() {
 
           email: this.form.personal_email,
           phone: this.form.phone_primary,
-
+            employmentTypeLkpId: this.form.employmentTypeLkpId 
+    ? Number(this.form.employmentTypeLkpId)
+    : null,   // ✅ ADD THIS
           dateOfJoining: this.form.date_of_joining,
+          dateOfBirth:   this.form.date_of_birth || null,         // ✅ ADD
 
           departmentId: Number(this.form.department_id),
           designationId: Number(this.form.designation_id),
@@ -1067,9 +1004,9 @@ async doDelete() {
       }
 
       if (step === 2) {
+      
         req('department_id', p.department_id)
         req('designation_id', p.designation_id)
-        req('pay_grade_id', p.pay_grade_id)
       }
 
       if (step === 3) {
@@ -1106,6 +1043,7 @@ async doDelete() {
         personal_email: '',
         phone_primary: '',
         department_id: '',
+        employmentTypeLkpId: '',
         designation_id: '',
         pay_grade_id: '',
         date_of_joining: '',
@@ -1135,10 +1073,13 @@ async doDelete() {
     this.selectedEmp = {
       ...this.selectedEmp,
 
+      employmentType_name: emp.employmentType_name || '—',
+
+
       // Personal
-      date_of_birth:    e.personalDetail?.dateOfBirth
-                          ? new Date(e.personalDetail.dateOfBirth).toLocaleDateString()
-                          : '—',
+      date_of_birth: e.personalDetail?.dateOfBirth
+                   ? new Date(e.personalDetail.dateOfBirth).toLocaleDateString()
+                   : '—',
       nationality:      e.personalDetail?.nationality || '—',
       marital_status:   e.personalDetail?.maritalStatus?.label || '—',
       blood_group:      e.personalDetail?.bloodGroup?.label || '—',

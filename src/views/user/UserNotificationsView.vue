@@ -113,87 +113,205 @@
 
 <script>
 import UserLayout from '../../components/UserLayout.vue'
+import { calendarAPI } from '@/services/api'
+
+// 🔥 Convert event → notification
+function mapEventToNotification(ev) {
+
+  const start = new Date(ev.startTime)
+
+  return {
+
+    id: ev.id,
+
+    title: `New Event: ${ev.title}`,
+
+    // ✅ FIXED
+    desc:
+      ev.visibility === 'PUBLIC'
+        ? 'Company-wide event'
+        : `${ev.department?.name} department event`,
+
+    time: start.toLocaleString('en-IN', {
+      timeZone: 'Asia/Kolkata'
+    }),
+
+    category: 'system',
+
+    categoryLabel:
+      ev.visibility === 'PUBLIC'
+        ? 'Public'
+        : ev.department?.name || 'Department',
+
+    read: false,
+
+    action: 'View Event',
+
+    actionDone: false,
+
+    icon: '<rect x="3" y="4" width="18" height="18" rx="2"/>',
+    date: getDateGroup(start),
+
+    visibility: ev.visibility
+  }
+}
+
+// 🔥 Group by date
+function getDateGroup(date) {
+  const today = new Date()
+  const yest = new Date()
+  yest.setDate(today.getDate() - 1)
+
+  if (date.toDateString() === today.toDateString()) return 'today'
+  if (date.toDateString() === yest.toDateString()) return 'yesterday'
+  return 'older'
+}
+
 export default {
   name: 'NotificationsView',
   components: { UserLayout },
+
   data() {
     return {
       activeFilter: 'all',
+
+      // filters UI
       filters: [
-        { key: 'all',      label: 'All',          count: 0 },
-        { key: 'unread',   label: 'Unread',        count: 3 },
-        { key: 'leave',    label: 'Leave',         count: 1 },
-        { key: 'attendance',label:'Attendance',    count: 0 },
-        { key: 'payroll',  label: 'Payroll',       count: 1 },
-        { key: 'system',   label: 'System',        count: 1 },
+        { key: 'all', label: 'All', count: 0 },
+        { key: 'unread', label: 'Unread', count: 0 },
+        { key: 'system', label: 'Calendar', count: 0 }
       ],
+
+      // categories UI
       categories: [
-        { key: 'leave',      label: 'Leave',      count: 2, icon: '<rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/>' },
-        { key: 'attendance', label: 'Attendance', count: 1, icon: '<path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11"/>' },
-        { key: 'payroll',    label: 'Payroll',    count: 1, icon: '<rect x="5" y="2" width="14" height="20" rx="2"/><line x1="9" y1="7" x2="15" y2="7"/><line x1="9" y1="11" x2="15" y2="11"/>' },
-        { key: 'system',     label: 'System',     count: 1, icon: '<circle cx="12" cy="12" r="3"/><path d="M12 2v2M12 20v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M2 12h2M20 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/>' },
-        { key: 'tasks',      label: 'Tasks',      count: 0, icon: '<polyline points="9 11 12 14 22 4"/><path d="M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11"/>' },
+        {
+          key: 'system',
+          label: 'Calendar',
+          count: 0,
+          icon: '<rect x="3" y="4" width="18" height="18" rx="2"/>'
+        }
       ],
+
       prefs: [
-        { label: 'Email Notifications', sub: 'Receive updates via email', enabled: true  },
-        { label: 'Leave Alerts',        sub: 'Notify on leave approvals',  enabled: true  },
-        { label: 'Payroll Updates',     sub: 'Payslip and salary alerts',  enabled: false },
-        { label: 'System Alerts',       sub: 'App updates and downtime',   enabled: true  },
+        { label: 'Event Notifications', sub: 'New event alerts', enabled: true }
       ],
-      notifications: [
-        { id: 1, title: 'Leave Request Approved', desc: 'Your Annual Leave request for Sep 05–06 has been approved by Alex Morgan.', time: '2 hours ago', category: 'leave', categoryLabel: 'Leave', read: false, action: 'View Details', actionDone: false, icon: '<path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11"/>', date: 'today' },
-        { id: 2, title: 'Payslip for March 2026', desc: 'Your payslip for March 2026 is now available. Download and review your salary breakdown.', time: '5 hours ago', category: 'payroll', categoryLabel: 'Payroll', read: false, action: 'Download', actionDone: false, icon: '<rect x="5" y="2" width="14" height="20" rx="2"/><line x1="9" y1="7" x2="15" y2="7"/>', date: 'today' },
-        { id: 3, title: 'Attendance Reminder', desc: "You haven't clocked in yet today. Please mark your attendance to avoid discrepancies.", time: '9:05 AM', category: 'attendance', categoryLabel: 'Attendance', read: false, action: 'Clock In', actionDone: false, icon: '<circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>', date: 'today' },
-        { id: 4, title: 'Q1 Performance Review Scheduled', desc: 'Your Q1 performance review with Sarah Miller is scheduled for Oct 12. Please complete your self-assessment beforehand.', time: 'Yesterday, 3:00 PM', category: 'tasks', categoryLabel: 'Tasks', read: true, action: 'Open Form', actionDone: false, icon: '<polyline points="9 11 12 14 22 4"/><path d="M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11"/>', date: 'yesterday' },
-        { id: 5, title: 'Leave Request Submitted', desc: 'Your leave request for Oct 20–25 (Annual Leave) has been submitted and is pending approval.', time: 'Yesterday, 10:20 AM', category: 'leave', categoryLabel: 'Leave', read: true, action: null, actionDone: false, icon: '<rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/>', date: 'yesterday' },
-        { id: 6, title: 'App Maintenance Notice', desc: 'Scheduled maintenance on Sunday, Apr 5 from 12:00 AM–2:00 AM. The app will be temporarily unavailable.', time: 'Mar 27, 2026', category: 'system', categoryLabel: 'System', read: true, action: null, actionDone: false, icon: '<circle cx="12" cy="12" r="3"/><path d="M12 2v2M12 20v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M2 12h2M20 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/>', date: 'older' },
-        { id: 7, title: 'Holiday: Dr. Ambedkar Jayanti', desc: 'A national holiday has been added to your calendar on Apr 14, 2026. Enjoy your day off!', time: 'Mar 26, 2026', category: 'system', categoryLabel: 'System', read: true, action: 'View Calendar', actionDone: false, icon: '<rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/>', date: 'older' },
-      ]
+
+      notifications: [],
+      loading: false,
+      interval: null
     }
   },
+
   computed: {
-    unreadCount() { return this.notifications.filter(n => !n.read).length },
+    unreadCount() {
+      return this.notifications.filter(n => !n.read).length
+    },
+
     notifStats() {
-      const total   = this.notifications.length
-      const unread  = this.notifications.filter(n => !n.read).length
-      const today   = this.notifications.filter(n => n.date === 'today').length
+      const total = this.notifications.length
+      const unread = this.unreadCount
+      const today = this.notifications.filter(n => n.date === 'today').length
+
       return [
-        { val: total,  label: 'Total',  color: '#3d5240' },
+        { val: total, label: 'Total', color: '#3d5240' },
         { val: unread, label: 'Unread', color: '#e05a4a' },
-        { val: today,  label: 'Today',  color: '#657D65' },
+        { val: today, label: 'Today', color: '#657D65' }
       ]
     },
+
     filteredNotifications() {
       const f = this.activeFilter
-      if (f === 'all')    return this.notifications
+      if (f === 'all') return this.notifications
       if (f === 'unread') return this.notifications.filter(n => !n.read)
       return this.notifications.filter(n => n.category === f)
     },
+
     groupedNotifications() {
       const groups = [
-        { label: 'Today',     key: 'today',     items: [] },
+        { label: 'Today', key: 'today', items: [] },
         { label: 'Yesterday', key: 'yesterday', items: [] },
-        { label: 'Earlier',   key: 'older',     items: [] },
+        { label: 'Earlier', key: 'older', items: [] }
       ]
+
       this.filteredNotifications.forEach(n => {
         const g = groups.find(g => g.key === n.date)
         if (g) g.items.push(n)
       })
+
       return groups.filter(g => g.items.length > 0)
     }
   },
+
   methods: {
+    // 🔥 MAIN API CALL
+    async fetchNotifications() {
+      this.loading = true
+
+      try {
+        const today = new Date()
+        const from = `${today.getFullYear()}-01-01`
+        const to = `${today.getFullYear()}-12-31`
+
+        const res = await calendarAPI.getEvents({ from, to })
+
+        const events = res.data.events || []
+
+        // 🔥 convert events → notifications
+        this.notifications = events.map(mapEventToNotification)
+
+        // update counts
+        this.updateCounts()
+
+      } catch (err) {
+        console.error("Failed to load notifications", err)
+      } finally {
+        this.loading = false
+      }
+    },
+
+    updateCounts() {
+      const unread = this.unreadCount
+
+      this.filters.find(f => f.key === 'unread').count = unread
+      this.filters.find(f => f.key === 'system').count = this.notifications.length
+
+      this.categories.find(c => c.key === 'system').count = this.notifications.length
+    },
+
     markRead(id) {
       const n = this.notifications.find(n => n.id === id)
-      if (n) n.read = true
+      if (n) {
+        n.read = true
+
+        // 👉 navigate to calendar
+        this.$router.push('/calendar')
+      }
     },
+
     markAllRead() {
-      this.notifications.forEach(n => n.read = true)
+      this.notifications.forEach(n => (n.read = true))
+      this.updateCounts()
     },
+
     dismissNotif(id) {
       const i = this.notifications.findIndex(n => n.id === id)
       if (i !== -1) this.notifications.splice(i, 1)
+      this.updateCounts()
     }
+  },
+
+  // ✅ LOAD + AUTO REFRESH
+  mounted() {
+    this.fetchNotifications()
+
+    // 🔥 auto refresh every 30 sec
+    this.interval = setInterval(() => {
+      this.fetchNotifications()
+    }, 30000)
+  },
+
+  beforeUnmount() {
+    clearInterval(this.interval)
   }
 }
 </script>
@@ -213,7 +331,7 @@ export default {
   cursor: pointer; transition: all .18s; font-family: var(--font-sans);
 }
 .nf-btn:hover { background: #f0f5f0; color: var(--forest-dk); }
-.nf-btn.active { background: var(--forest-dk); color: #fff; border-color: var(--forest-dk); font-weight: 600; }
+.nf-btn.active { background: var(--forest-dk); color: #09350a; border-color: var(--forest-dk); font-weight: 600; }
 .nf-cnt {
   background: var(--peach); color: #7a3325;
   font-size: 10px; font-weight: 700; padding: 0 5px;

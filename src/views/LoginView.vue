@@ -158,13 +158,14 @@ export default {
 
   const auth = useAuthStore(); // ✅ use pinia
 
+
   try {
     const email = this.email.trim().toLowerCase();
     const password = this.password.trim();
 
-    const res = await authAPI.login(email, password);
-
-    const { access_token, refresh_token, user } = res.data;
+        const res = await authAPI.login(email, password);
+        
+        const { access_token, refresh_token, user } = res.data;
 
     // ✅ USE PINIA STORE (IMPORTANT CHANGE)
     auth.login({ access_token, refresh_token, user });
