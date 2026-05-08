@@ -416,10 +416,9 @@
 </template>
 
 <script>
-import AdminLayout   from '../components/AdminLayout.vue'
-import { calendarAPI,lookupAPI } from '../services/api.js'   // ← adjust path to match your project
+import AdminLayout from '../components/AdminLayout.vue'
+import { calendarAPI, lookupAPI } from '../services/api.js'
 
-// ── Map backend eventType → local type key + color ───────────────────────────
 const EVENT_TYPE_MAP = {
   MEETING:       { type: 'meeting',  color: '#657D65' },
   TRAINING:      { type: 'training', color: '#9c6f0c' },
@@ -437,7 +436,6 @@ const HOLIDAY_TYPE_LABEL = {
   COMPANY:  'Company Holiday',
 }
 
-// ── Normalize backend event → shape the template expects ─────────────────────
 function normalizeEvent(ev) {
   const start   = new Date(ev.startTime)
   const typeMap = EVENT_TYPE_MAP[ev.eventType] || EVENT_TYPE_MAP.OTHER
@@ -446,22 +444,24 @@ function normalizeEvent(ev) {
     ? 'All Day'
     : start.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: true })
 
-  const depts = ev.attendees?.length
-    ? [...new Set(
-        ev.attendees.map(a => a.employee?.department?.name).filter(Boolean)
-      )].join(', ') || 'All Departments'
-    : (ev.department?.name || 'All Departments')
+  const depts =
+  ev.visibility === 'PUBLIC'
+    ? 'All Departments'
+    : ev.department?.name || 'Department Event'
+
+  // Build date string without UTC conversion (fixes IST 1-day shift bug)
+  const dateStr = [
+    start.getFullYear(),
+    String(start.getMonth() + 1).padStart(2, '0'),
+    String(start.getDate()).padStart(2, '0'),
+  ].join('-')
 
   return {
     id:          ev.id,
     title:       ev.title,
     day:         String(start.getDate()).padStart(2, '0'),
     month:       start.toLocaleDateString('en-IN', { month: 'short' }).toUpperCase(),
-date: [
-  start.getFullYear(),
-  String(start.getMonth() + 1).padStart(2, '0'),
-  String(start.getDate()).padStart(2, '0'),
-].join('-'),
+    date:        dateStr,
     time:        timeStr,
     location:    ev.location    || '—',
     departments: depts,
@@ -471,20 +471,21 @@ date: [
     meetLink:    ev.meetLink    || null,
     visibility:  ev.visibility,
     status:      ev.status,
+    department:  ev.department  || null,
   }
 }
 
-// ── Normalize backend holiday → shape the template expects ────────────────────
 function normalizeHoliday(h) {
-  const dateStr = h.date.split('T')[0]              // "2026-05-01"
-  const [y, m, day] = dateStr.split('-')
+  // Slice directly — never parse through Date() to avoid UTC shift
+  const dateStr      = h.date.split('T')[0]
+  const [y, m, day]  = dateStr.split('-')
   return {
     id:    h.id,
-    day:   day,                                      // "01"
+    day,
     month: new Date(+y, +m - 1, +day)
              .toLocaleDateString('en-IN', { month: 'short' })
-             .toUpperCase(),                         // "MAY"
-    date:  dateStr,                                  // "2026-05-01"
+             .toUpperCase(),
+    date:  dateStr,
     name:  h.name,
     type:  HOLIDAY_TYPE_LABEL[h.type] || h.type,
   }
@@ -501,64 +502,73 @@ export default {
       currentYear:  today.getFullYear(),
       currentMonth: today.getMonth(),
       view:         'month',
-      selectedDay:  today.toISOString().split('T')[0],
-      selectedEvent: null,
-      showAddModal:  false,
-      activeFilter:  'all',
+      selectedDay:  [
+        today.getFullYear(),
+        String(today.getMonth() + 1).padStart(2, '0'),
+        String(today.getDate()).padStart(2, '0'),
+      ].join('-'),
+      selectedEvent:  null,
+      showAddModal:   false,
+      showHolidayModal: false,
+      activeFilter:   'all',
 
-      // ── State ────────────────────────────────────────────────────────────
-      loading:    false,
-      saving:     false,
-      deleting:   false,
-      errorMsg:   '',
-      successMsg: '',
+      // State
+      loading:       false,
+      saving:        false,
+      holidaySaving: false,
+      errorMsg:      '',
+      holidayError:  '',
+      successMsg:    '',
 
       dayNames: ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'],
 
-      // ── New event form ────────────────────────────────────────────────────
+      // Departments from backend
+      departments: [],
+
+      // Notifications
+      notifications:  [],
+      unreadCount:    0,
+      showNotifPanel: false,
+      notifLoading:   false,
+
+      // New event form
       newEvent: {
-        title: '',
-  date: '',
-  startTime: '',
-  endTime: '',
-  type: 'MEETING',
-  location: '',
-  meetLink: '',
-  description: '',
-  visibility: 'PUBLIC',
-  isAllDay: false,
-  isRecurring: false,
-  recurrenceDays: [],
-  recurrenceEnd: '',
-  departmentId: '',
-  attendeeIds: []
+        title:        '',
+        date:         '',
+        startTime:    '',
+        endTime:      '',
+        type:         'MEETING',
+        visibility:   'PUBLIC',
+        departmentId: '',
+        location:     '',
+        meetLink:     '',
+        description:  '',
+        isAllDay:     false,
+        attendeeIds:  [],
       },
 
-      showHolidayModal: false,
-holidaySaving: false,
-holidayError: '',
-newHoliday: {
-  name: '',
-  date: '',
-  type: 'NATIONAL',
-  stateCode: '',
-  description: ''
-},
+      // New holiday form
+      newHoliday: {
+        name:        '',
+        date:        '',
+        type:        'NATIONAL',
+        stateCode:   '',
+        description: '',
+      },
 
-      // ── Data ─────────────────────────────────────────────────────────────
+      // Data
       events:   [],
       holidays: [],
-      departments:[],
 
-      // ── Filter chips ──────────────────────────────────────────────────────
+      // Filter chips
       eventTypes: [
         { type: 'meeting',  label: 'Meeting',  color: '#657D65' },
-        {type: 'review' ,label:'Review'},
         { type: 'holiday',  label: 'Holiday',  color: '#86d98b' },
-       
+        { type: 'deadline', label: 'Deadline', color: '#f0a090' },
+        { type: 'training', label: 'Training', color: '#9c6f0c' },
+        { type: 'review',   label: 'Review',   color: '#757872' },
       ],
 
-      // ── Backend type options for the modal select ─────────────────────────
       backendEventTypes: [
         { value: 'MEETING',       label: 'Meeting'       },
         { value: 'TRAINING',      label: 'Training'      },
@@ -570,9 +580,11 @@ newHoliday: {
   },
 
   async mounted() {
-    await this.fetchMonthData()
-    await this.loadDepartments()   // 👈 ADD THIS
-
+    await Promise.all([
+      this.fetchMonthData(),
+      this.fetchDepartments(),
+      this.fetchNotifications(),
+    ])
   },
 
   watch: {
@@ -587,33 +599,78 @@ newHoliday: {
     },
 
     calCells() {
-      const firstDay    = new Date(this.currentYear, this.currentMonth, 1).getDay()
-      const daysInMonth = new Date(this.currentYear, this.currentMonth + 1, 0).getDate()
-      const daysInPrev  = new Date(this.currentYear, this.currentMonth, 0).getDate()
-      const todayStr    = this.today.toISOString().split('T')[0]
-      const cells       = []
 
-      for (let i = firstDay - 1; i >= 0; i--) {
-        const d = daysInPrev - i
-        cells.push({
-          day: d, currentMonth: false,
-          date: this.formatDate(this.currentYear, this.currentMonth - 1, d),
-          isToday: false,
-        })
-      }
-      for (let d = 1; d <= daysInMonth; d++) {
-        const dateStr = this.formatDate(this.currentYear, this.currentMonth, d)
-        cells.push({ day: d, currentMonth: true, date: dateStr, isToday: dateStr === todayStr })
-      }
-      const remaining = 42 - cells.length
-      for (let d = 1; d <= remaining; d++) {
-        cells.push({
-          day: d, currentMonth: false,
-          date: this.formatDate(this.currentYear, this.currentMonth + 1, d),
-          isToday: false,
-        })
-      }
-      return cells
+  const firstDay =
+    new Date(this.currentYear, this.currentMonth, 1).getDay()
+
+  const daysInMonth =
+    new Date(this.currentYear, this.currentMonth + 1, 0).getDate()
+
+  const daysInPrev =
+    new Date(this.currentYear, this.currentMonth, 0).getDate()
+
+  const cells = []
+
+  // Previous month cells
+  for (let i = firstDay - 1; i >= 0; i--) {
+
+    cells.push({
+      day: daysInPrev - i,
+      currentMonth: false,
+      date: this.formatDate(
+        this.currentYear,
+        this.currentMonth - 1,
+        daysInPrev - i
+      ),
+      isToday: false
+    })
+  }
+
+  // Current month cells
+  for (let d = 1; d <= daysInMonth; d++) {
+
+    const dateStr = this.formatDate(
+      this.currentYear,
+      this.currentMonth,
+      d
+    )
+
+    cells.push({
+      day: d,
+      currentMonth: true,
+      date: dateStr,
+
+      // ✅ TODAY CHECK
+      isToday: dateStr === this.todayStr
+    })
+  }
+
+  // Next month cells
+  const remaining = 42 - cells.length
+
+  for (let d = 1; d <= remaining; d++) {
+
+    cells.push({
+      day: d,
+      currentMonth: false,
+      date: this.formatDate(
+        this.currentYear,
+        this.currentMonth + 1,
+        d
+      ),
+      isToday: false
+    })
+  }
+
+  return cells
+},
+
+    todayStr() {
+      return [
+        this.today.getFullYear(),
+        String(this.today.getMonth() + 1).padStart(2, '0'),
+        String(this.today.getDate()).padStart(2, '0'),
+      ].join('-')
     },
 
     filteredEvents() {
@@ -624,29 +681,34 @@ newHoliday: {
 
     selectedDayLabel() {
       if (!this.selectedDay) return 'Today'
-      return new Date(this.selectedDay + 'T00:00:00')
+      const [y, m, d] = this.selectedDay.split('-')
+      return new Date(+y, +m - 1, +d)
         .toLocaleDateString('en-IN', { weekday: 'long', day: 'numeric', month: 'long' })
     },
 
     selectedDayEvents() {
-      return this.filteredEvents.filter(e => e.date === this.selectedDay)
+      return this.cellEvents(this.selectedDay)
     },
 
     upcomingEvents() {
-      const todayStr = this.today.toISOString().split('T')[0]
-      return this.filteredEvents.filter(e => e.date >= todayStr).slice(0, 5)
+      return this.filteredEvents.filter(e => e.date >= this.todayStr).slice(0, 5)
     },
 
-    // Holidays filtered to current visible month only (for sidebar)
     monthHolidays() {
       const m      = String(this.currentMonth + 1).padStart(2, '0')
       const prefix = `${this.currentYear}-${m}`
       return this.holidays.filter(h => h.date?.startsWith(prefix))
     },
+
+    // Show department dropdown only when visibility = DEPARTMENT
+    showDeptDropdown() {
+      return this.newEvent.visibility === 'DEPARTMENT'
+    },
   },
 
   methods: {
-    // ── FETCH events + holidays for current month ───────────────────────────
+    // ── FETCH ─────────────────────────────────────────────────────────────────
+
     async fetchMonthData() {
       this.loading  = true
       this.errorMsg = ''
@@ -657,12 +719,9 @@ newHoliday: {
         const from = `${y}-${m}-01`
         const to   = `${y}-${m}-${String(days).padStart(2, '0')}`
 
-        // calendarAPI.getEvents returns { events[], holidays[] }
-        const res = await calendarAPI.getEvents({ from, to })
-
+        const res     = await calendarAPI.getEvents({ from, to })
         this.events   = (res.data.events   || []).map(normalizeEvent)
         this.holidays = (res.data.holidays || []).map(normalizeHoliday)
-
       } catch (err) {
         this.errorMsg = err?.response?.data?.error || 'Failed to load calendar'
         console.error('[fetchMonthData]', err)
@@ -671,113 +730,127 @@ newHoliday: {
       }
     },
 
-    async loadDepartments() {
-  try {
-    const res = await lookupAPI.getDepartments()
+    async fetchDepartments() {
+      try {
+        const res        = await lookupAPI.getDepartments()
+        this.departments = res.data?.departments || res.data || []
+      } catch (err) {
+        console.warn('[fetchDepartments]', err)
+      }
+    },
 
-    this.departments = res.data   // ✅ CORRECT
+    async fetchNotifications() {
+      this.notifLoading = true
+      try {
+        const res           = await calendarAPI.getNotifications()
+        this.notifications  = res.data.notifications || []
+        this.unreadCount    = res.data.unreadCount   || 0
+      } catch (err) {
+        console.warn('[fetchNotifications]', err)
+      } finally {
+        this.notifLoading = false
+      }
+    },
 
-    console.log("Departments:", this.departments)
+    // ── CREATE EVENT ──────────────────────────────────────────────────────────
 
-  } catch (err) {
-    console.error("Failed to load departments", err)
-  }
-},
+    async addEvent() {
+      this.errorMsg = ''
 
-    // ── CREATE event ────────────────────────────────────────────────────────
-   async addEvent() {
-  if (!this.newEvent.title || !this.newEvent.date) {
-    this.errorMsg = "Title and date required"
-    return
-  }
+      if (!this.newEvent.title || !this.newEvent.date) {
+        this.errorMsg = 'Title and date are required'
+        return
+      }
+      if (!this.newEvent.isAllDay && (!this.newEvent.startTime || !this.newEvent.endTime)) {
+        this.errorMsg = 'Start time and end time are required (or check All Day)'
+        return
+      }
+      if (this.newEvent.visibility === 'DEPARTMENT' && !this.newEvent.departmentId) {
+        this.errorMsg = 'Please select a department'
+        return
+      }
 
-  const payload = {
-    title: this.newEvent.title,
-    description: this.newEvent.description || null,
-    eventType: this.newEvent.type,
-    startTime: `${this.newEvent.date}T${this.newEvent.startTime}:00`,
-    endTime: `${this.newEvent.date}T${this.newEvent.endTime}:00`,
-    meetLink: this.newEvent.meetLink || null,
-    visibility: this.newEvent.visibility,
-    isAllDay: false,
-    attendeeIds: this.newEvent.visibility === 'PUBLIC'
-      ? []
-      : this.newEvent.attendeeIds || []
-  }
+      this.saving = true
+      try {
+        const startISO = this.newEvent.isAllDay
+          ? `${this.newEvent.date}T00:00:00`
+          : `${this.newEvent.date}T${this.newEvent.startTime}:00`
+        const endISO = this.newEvent.isAllDay
+          ? `${this.newEvent.date}T23:59:59`
+          : `${this.newEvent.date}T${this.newEvent.endTime}:00`
 
-  // ✅ Department condition
-  if (this.newEvent.visibility === 'DEPARTMENT') {
-    payload.departmentId = Number(this.newEvent.departmentId)
-  }
+        const payload = {
+          title:        this.newEvent.title,
+          description:  this.newEvent.description  || null,
+          eventType:    this.newEvent.type,
+          startTime:    startISO,
+          endTime:      endISO,
+          isAllDay:     this.newEvent.isAllDay,
+          location:     this.newEvent.location     || null,
+          meetLink:     this.newEvent.meetLink      || null,
+          visibility:   this.newEvent.visibility,
+          departmentId: this.newEvent.visibility === 'DEPARTMENT'
+                          ? parseInt(this.newEvent.departmentId)
+                          : null,
+          attendeeIds:  this.newEvent.attendeeIds  || [],
+        }
 
-  // ✅ Recurring condition
-  if (this.newEvent.isRecurring) {
-    payload.isRecurring = true
-    payload.recurrenceRule = `FREQ=WEEKLY;BYDAY=${this.newEvent.recurrenceDays.join(',')}`
-    payload.recurrenceEnd = this.newEvent.recurrenceEnd
-  }
+        const res = await calendarAPI.createEvent(payload)
+        this.events.push(normalizeEvent(res.data.event))
+        this.selectedDay  = this.newEvent.date
+        this.showAddModal = false
+        this.showSuccess(`Event created! ${res.data.invited} employees notified.`)
+        this.resetEventForm()
 
-  try {
-    await calendarAPI.createEvent(payload)
+        // Refresh notifications so bell updates
+        await this.fetchNotifications()
 
-    await this.fetchMonthData()   // BEST PRACTICE
-    this.showAddModal = false
-    this.showSuccess("Event created")
+      } catch (err) {
+        this.errorMsg = err?.response?.data?.error || 'Failed to create event'
+        console.error('[addEvent]', err)
+      } finally {
+        this.saving = false
+      }
+    },
 
-  } catch (err) {
-    this.errorMsg = err?.response?.data?.error || "Failed"
-  }
-},
+    // ── CREATE HOLIDAY ────────────────────────────────────────────────────────
 
     async addHoliday() {
-  this.holidayError = ''
+      this.holidayError = ''
+      if (!this.newHoliday.name || !this.newHoliday.date) {
+        this.holidayError = 'Name and date are required'
+        return
+      }
+      this.holidaySaving = true
+      try {
+        const payload = {
+          name:        this.newHoliday.name,
+          date:        this.newHoliday.date,
+          type:        this.newHoliday.type,
+          stateCode:   this.newHoliday.stateCode   || null,
+          description: this.newHoliday.description || null,
+        }
 
-  // validation
-  if (!this.newHoliday.name || !this.newHoliday.date) {
-    this.holidayError = "Holiday name and date are required"
-    return
-  }
+        const res      = await calendarAPI.createHoliday(payload)
+        const normalized = normalizeHoliday(res.data.holiday)
+        this.holidays.push(normalized)
+        this.showHolidayModal = false
+        this.showSuccess('Holiday added successfully')
+        this.resetHolidayForm()
+      } catch (err) {
+        this.holidayError = err?.response?.data?.error || 'Failed to add holiday'
+        console.error('[addHoliday]', err)
+      } finally {
+        this.holidaySaving = false
+      }
+    },
 
-  this.holidaySaving = true
+    // ── DELETE EVENT ──────────────────────────────────────────────────────────
 
-  try {
-    const payload = {
-      name: this.newHoliday.name,
-      date: this.newHoliday.date,
-      type: this.newHoliday.type,
-      stateCode: this.newHoliday.stateCode || null,
-      description: this.newHoliday.description || null
-    }
-
-    const res = await calendarAPI.createHoliday(payload)
-
-    // ✅ update UI instantly
-    const newHol = res.data.holiday || res.data
-
-    this.holidays.push({
-      id: newHol.id,
-      name: newHol.name,
-      type: newHol.type,
-      date: newHol.date.split('T')[0],
-      day: newHol.date.split('T')[0].split('-')[2],
-      month: new Date(newHol.date).toLocaleString('en-IN', { month: 'short' }).toUpperCase()
-    })
-
-    this.closeHolidayModal()
-    this.showSuccess("Holiday added successfully")
-
-  } catch (err) {
-    console.error(err)
-    this.holidayError = err?.response?.data?.error || "Failed to add holiday"
-  } finally {
-    this.holidaySaving = false
-  }
-},
-
-    // ── DELETE / cancel event ───────────────────────────────────────────────
     async deleteEvent(id) {
-      if (!confirm('Cancel this event? This cannot be undone.')) return
-      this.deleting = true
+      // Skip confirmation for holiday cells (they start with 'hol-')
+      if (String(id).startsWith('hol-')) return
+      if (!confirm('Cancel this event?')) return
       try {
         await calendarAPI.deleteEvent(id)
         this.events = this.events.filter(e => e.id !== id)
@@ -785,13 +858,51 @@ newHoliday: {
         this.showSuccess('Event cancelled')
       } catch (err) {
         this.errorMsg = err?.response?.data?.error || 'Failed to cancel event'
-        console.error('[deleteEvent]', err)
-      } finally {
-        this.deleting = false
       }
     },
 
-    // ── Navigation ──────────────────────────────────────────────────────────
+    // ── DELETE HOLIDAY ────────────────────────────────────────────────────────
+
+    async deleteHoliday(id) {
+      if (!confirm('Remove this holiday?')) return
+      try {
+        await calendarAPI.deleteHoliday(id)
+        this.holidays = this.holidays.filter(h => h.id !== id)
+        this.showSuccess('Holiday removed')
+      } catch (err) {
+        this.errorMsg = err?.response?.data?.error || 'Failed to remove holiday'
+      }
+    },
+
+    // ── NOTIFICATIONS ─────────────────────────────────────────────────────────
+
+    async markRead(notifId) {
+      try {
+        await calendarAPI.markNotificationRead(notifId)
+        this.notifications   = this.notifications.filter(n => n.id !== notifId)
+        this.unreadCount     = Math.max(0, this.unreadCount - 1)
+      } catch (err) {
+        console.warn('[markRead]', err)
+      }
+    },
+
+    async markAllRead() {
+      try {
+        await calendarAPI.markAllRead()
+        this.notifications = []
+        this.unreadCount   = 0
+      } catch (err) {
+        console.warn('[markAllRead]', err)
+      }
+    },
+
+    toggleNotifPanel() {
+      this.showNotifPanel = !this.showNotifPanel
+      if (this.showNotifPanel) this.fetchNotifications()
+    },
+
+    // ── NAVIGATION ────────────────────────────────────────────────────────────
+
     prevMonth() {
       if (this.currentMonth === 0) { this.currentMonth = 11; this.currentYear-- }
       else this.currentMonth--
@@ -803,33 +914,42 @@ newHoliday: {
     goToday() {
       this.currentYear  = this.today.getFullYear()
       this.currentMonth = this.today.getMonth()
-      this.selectedDay  = this.today.toISOString().split('T')[0]
+      this.selectedDay  = this.todayStr
     },
 
-    // ── Helpers ─────────────────────────────────────────────────────────────
+    // ── HELPERS ───────────────────────────────────────────────────────────────
+
+    // Build date string from local date components — never uses toISOString()
     formatDate(y, m, d) {
-  const dt = new Date(y, m, d)
-  return [
-    dt.getFullYear(),
-    String(dt.getMonth() + 1).padStart(2, '0'),
-    String(dt.getDate()).padStart(2, '0'),
-  ].join('-')
-},
+      const dt = new Date(y, m, d)
+      return [
+        dt.getFullYear(),
+        String(dt.getMonth() + 1).padStart(2, '0'),
+        String(dt.getDate()).padStart(2, '0'),
+      ].join('-')
+    },
 
+    // Returns events + holidays for a given date cell
     cellEvents(date) {
-const evs = this.filteredEvents.filter(e => e.date === date)
+      const evs = this.filteredEvents.filter(e => e.date === date)
 
-  const hols = this.holidays
-    .filter(h => h.date === date)
-    .map(h => ({
-      id:    'hol-' + h.id,
-      title: h.name,
-      color: '#e05555',     // red
-      type:  'holiday',
-      date:  h.date,
-    }))
+      // Holidays shown as red cells
+      const hols = this.holidays
+        .filter(h => h.date === date)
+        .map(h => ({
+          id:          'hol-' + h.id,
+          title:       h.name,
+          color:       '#e05555',
+          type:        'holiday',
+          date:        h.date,
+          time:        'All Day',
+          location:    '—',
+          departments: 'All Staff',
+          desc:        h.type,
+        }))
 
-  return [...hols, ...evs]    },
+      return [...hols, ...evs]
+    },
 
     openAddModal() {
       this.newEvent.date = this.selectedDay
@@ -838,37 +958,41 @@ const evs = this.filteredEvents.filter(e => e.date === date)
     },
 
     openHolidayModal() {
-  this.showHolidayModal = true
-  this.holidayError = ''
-},
+      this.newHoliday.date = this.selectedDay
+      this.holidayError    = ''
+      this.showHolidayModal = true
+    },
 
-closeHolidayModal() {
-  this.showHolidayModal = false
-  this.resetHolidayForm()
-},
-resetHolidayForm() {
-  this.newHoliday = {
-    name: '',
-    date: '',
-    type: 'NATIONAL',
-    stateCode: '',
-    description: ''
-  }
-},
+    closeHolidayModal() {
+      this.showHolidayModal = false
+      this.holidayError     = ''
+      this.resetHolidayForm()
+    },
 
-
-    resetForm() {
+    resetEventForm() {
       this.newEvent = {
         title: '', date: '', startTime: '', endTime: '',
-        type: 'MEETING', location: '', meetLink: '',
-        description: '', visibility: 'PUBLIC',
+        type: 'MEETING', visibility: 'PUBLIC', departmentId: '',
+        location: '', meetLink: '', description: '',
         isAllDay: false, attendeeIds: [],
       }
     },
 
+    resetHolidayForm() {
+      this.newHoliday = { name: '', date: '', type: 'NATIONAL', stateCode: '', description: '' }
+    },
+
     showSuccess(msg) {
       this.successMsg = msg
-      setTimeout(() => { this.successMsg = '' }, 3000)
+      setTimeout(() => { this.successMsg = '' }, 4000)
+    },
+
+    formatNotifTime(dateStr) {
+      if (!dateStr) return ''
+      const d = new Date(dateStr)
+      return d.toLocaleDateString('en-IN', { day: 'numeric', month: 'short' }) +
+             ' · ' +
+             d.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: true })
     },
   },
 }

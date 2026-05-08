@@ -6,7 +6,7 @@ const isLocalhost =
 
 const API_BASE_URL = isLocalhost
   ? "http://localhost:3000/api"
-  : "http://10.113.178.55:3000/api";
+  : "http://10.202.32.55:3000/api";
 const apiClient = axios.create({
   baseURL: API_BASE_URL,
   timeout: 10000,
@@ -94,54 +94,33 @@ export const attendanceAPI = {
 
 // ── Calendar API ──────────────────────────────────────────────────────────────
 export const calendarAPI = {
-  // ── Holidays ────────────────────────────────────────────────────────────────
-  // GET /api/calendar/holidays?year=2026&month=5
-  getHolidays:   (params)      => apiClient.get('/calendar/holidays', { params }),
+  // Holidays
+  getHolidays:   (params)   => apiClient.get('/calendar/holidays', { params }),
+  createHoliday: (data)     => apiClient.post('/calendar/holidays', data),
+  updateHoliday: (id, data) => apiClient.put(`/calendar/holidays/${id}`, data),
+  deleteHoliday: (id)       => apiClient.delete(`/calendar/holidays/${id}`),
  
-  // POST /api/calendar/holidays  (admin only)
-  createHoliday: (data)        => apiClient.post('/calendar/holidays', data),
+  // Events
+  getEvents:    (params)    => apiClient.get('/calendar/events', { params }),
+  getEventById: (id)        => apiClient.get(`/calendar/events/${id}`),
+  createEvent:  (data)      => apiClient.post('/calendar/events', data),
+  updateEvent:  (id, data)  => apiClient.put(`/calendar/events/${id}`, data),
+  deleteEvent:  (id)        => apiClient.delete(`/calendar/events/${id}`),
  
-  // PUT /api/calendar/holidays/:id  (admin only)
-  updateHoliday: (id, data)    => apiClient.put(`/calendar/holidays/${id}`, data),
+  // Attendees / RSVP
+  rsvp:   (id, status) => apiClient.put(`/calendar/events/${id}/rsvp`, { rsvpStatus: status }),
+  invite: (id, empIds) => apiClient.post(`/calendar/events/${id}/invite`, { employeeIds: empIds }),
  
-  // DELETE /api/calendar/holidays/:id  (admin only)
-  deleteHoliday: (id)          => apiClient.delete(`/calendar/holidays/${id}`),
+  // Notifications
+  getNotifications:      ()   => apiClient.get('/calendar/notifications'),
+  markNotificationRead:  (id) => apiClient.put(`/calendar/notifications/${id}/read`),
+  markAllRead:           ()   => apiClient.put('/calendar/notifications/read-all'),
  
-  // ── Events ──────────────────────────────────────────────────────────────────
-  // GET /api/calendar/events?from=2026-05-01&to=2026-05-31
-  getEvents:     (params)      => apiClient.get('/calendar/events', { params }),
- 
-  // GET /api/calendar/events/:id
-  getEventById:  (id)          => apiClient.get(`/calendar/events/${id}`),
- 
-  // POST /api/calendar/events
-  createEvent:   (data)        => apiClient.post('/calendar/events', data),
- 
-  // PUT /api/calendar/events/:id
-  updateEvent:   (id, data)    => apiClient.put(`/calendar/events/${id}`, data),
- 
-  // DELETE /api/calendar/events/:id  (soft cancel)
-  deleteEvent:   (id)          => apiClient.delete(`/calendar/events/${id}`),
- 
-  // ── Attendees / RSVP ────────────────────────────────────────────────────────
-  // PUT /api/calendar/events/:id/rsvp  body: { rsvpStatus }
-  rsvp:          (id, status)  => apiClient.put(`/calendar/events/${id}/rsvp`, { rsvpStatus: status }),
- 
-  // POST /api/calendar/events/:id/invite  body: { employeeIds[] }
-  invite:        (id, empIds)  => apiClient.post(`/calendar/events/${id}/invite`, { employeeIds: empIds }),
- 
-  // ── Views ───────────────────────────────────────────────────────────────────
-  // GET /api/calendar/my-calendar?from=...&to=...
-  getMyCalendar: (params)      => apiClient.get('/calendar/my-calendar', { params }),
- 
-  // GET /api/calendar/team-view?from=...&to=...&departmentId=...
-  getTeamView:   (params)      => apiClient.get('/calendar/team-view', { params }),
- 
-  // GET /api/calendar/upcoming?days=7&limit=10
-  getUpcoming:   (params)      => apiClient.get('/calendar/upcoming', { params }),
- 
-  // GET /api/calendar/admin/overview?year=2026&month=5  (admin only)
-  getAdminOverview: (params)   => apiClient.get('/calendar/admin/overview', { params }),
+  // Views
+  getMyCalendar:    (params) => apiClient.get('/calendar/my-calendar',    { params }),
+  getTeamView:      (params) => apiClient.get('/calendar/team-view',      { params }),
+  getUpcoming:      (params) => apiClient.get('/calendar/upcoming',        { params }),
+  getAdminOverview: (params) => apiClient.get('/calendar/admin/overview',  { params }),
 }
 
 export const lookupAPI = {

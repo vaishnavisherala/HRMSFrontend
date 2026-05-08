@@ -117,24 +117,42 @@ import { calendarAPI } from '@/services/api'
 
 // 🔥 Convert event → notification
 function mapEventToNotification(ev) {
+
   const start = new Date(ev.startTime)
 
   return {
+
     id: ev.id,
+
     title: `New Event: ${ev.title}`,
-    desc: ev.description || 'A new event has been scheduled.',
-    time: start.toLocaleString(),
+
+    // ✅ FIXED
+    desc:
+      ev.visibility === 'PUBLIC'
+        ? 'Company-wide event'
+        : `${ev.department?.name} department event`,
+
+    time: start.toLocaleString('en-IN', {
+      timeZone: 'Asia/Kolkata'
+    }),
 
     category: 'system',
-    categoryLabel: 'Calendar',
+
+    categoryLabel:
+      ev.visibility === 'PUBLIC'
+        ? 'Public'
+        : ev.department?.name || 'Department',
 
     read: false,
+
     action: 'View Event',
+
     actionDone: false,
 
     icon: '<rect x="3" y="4" width="18" height="18" rx="2"/>',
+    date: getDateGroup(start),
 
-    date: getDateGroup(start)
+    visibility: ev.visibility
   }
 }
 
