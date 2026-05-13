@@ -1,16 +1,46 @@
 <template>
   <UserLayout page-title="Leave Management" page-sub="Balance your workflow and wellness with ease." search-placeholder="Search resources…">
 
+    <!-- Toast -->
+    <transition name="toast">
+      <div v-if="toast.show" class="toast-notif" :class="toast.type">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+          <polyline v-if="toast.type === 'success'" points="20 6 9 17 4 12"/>
+          <template v-else><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></template>
+        </svg>
+        {{ toast.message }}
+      </div>
+    </transition>
+
+    <!-- Loading shimmer -->
+    <div v-if="balancesLoading" class="balance-row">
+      <div v-for="i in 4" :key="i" class="bal-card shimmer"></div>
+    </div>
+
     <!-- Leave Balance Cards -->
-    <div class="balance-row">
-      <div v-for="b in balanceCards" :key="b.type" class="bal-card" :class="{ 'bal-featured': b.featured }">
-        <div class="bal-type">{{ b.type }}</div>
-        <div class="bal-num">{{ b.used }}</div>
+    <div v-else class="balance-row">
+      <div
+        v-for="(b, i) in balanceCards"
+        :key="b.leaveTypeId"
+        class="bal-card"
+        :class="{ 'bal-featured': i === 1 }"
+      >
+        <div class="bal-type">{{ b.code }}</div>
+        <div class="bal-num">{{ b.used.toFixed(1) }}</div>
         <div class="bal-total">/ {{ b.total }} days</div>
         <div class="bal-bar-wrap">
-          <div class="bal-bar" :style="{ width: (b.used / b.total * 100) + '%', background: b.barColor }"></div>
+          <div
+            class="bal-bar"
+            :style="{
+              width: b.total > 0 ? Math.min(b.used / b.total * 100, 100) + '%' : '0%',
+              background: b.barColor
+            }"
+          ></div>
         </div>
-        <div class="bal-rem">{{ b.total - b.used }} days remaining</div>
+        <div class="bal-rem">{{ b.remaining.toFixed(1) }} days remaining</div>
+      </div>
+      <div v-if="balanceCards.length === 0" class="bal-empty">
+        No leave balances found. Contact HR to initialize your balance.
       </div>
     </div>
 
@@ -30,30 +60,41 @@
             </button>
           </div>
         </div>
+
         <!-- Day labels -->
         <div class="cal-days">
           <span v-for="d in ['SUN','MON','TUE','WED','THU','FRI','SAT']" :key="d" class="cal-dl">{{ d }}</span>
         </div>
+
         <!-- Cells -->
         <div class="cal-grid">
-          <div v-for="(cell, i) in calCells" :key="i"
+          <div
+            v-for="(cell, i) in calCells"
+            :key="i"
             class="cal-cell"
             :class="{
-              'other': !cell.currentMonth,
-              'today': cell.isToday,
-              'selected': cell.date === selectedDate,
-              'has-leave': cell.leaveType,
+              'other':     !cell.currentMonth,
+              'today':      cell.isToday,
+              'selected':   cell.date === form.from || cell.date === form.to,
+              'in-range':   isInRange(cell.date),
+              'has-leave':  !!cell.leaveStatus,
+              'on-leave':   cell.leaveStatus === 'APPROVED',
+              'pending-leave': cell.leaveStatus === 'PENDING',
             }"
-            @click="cell.currentMonth && (selectedDate = cell.date)">
+            @click="handleCellClick(cell)"
+          >
             <span class="cell-num">{{ cell.day }}</span>
-            <span v-if="cell.leaveType" class="cell-leave-dot" :class="'dot-' + cell.leaveType"></span>
+            <span v-if="cell.leaveStatus" class="cell-leave-dot"
+              :class="cell.leaveStatus === 'APPROVED' ? 'dot-annual' : 'dot-other'">
+            </span>
           </div>
         </div>
+
         <!-- Legend -->
         <div class="cal-legend">
-          <span class="cl-item"><span class="cl-dot annual"></span>Annual Leave</span>
-          <span class="cl-item"><span class="cl-dot sick"></span>Sick Leave</span>
-          <span class="cl-item"><span class="cl-dot other"></span>Other</span>
+          <span class="cl-item"><span class="cl-dot annual"></span>Approved</span>
+          <span class="cl-item"><span class="cl-dot other"></span>Pending</span>
+          <span class="cl-item"><span class="cl-dot holiday"></span>Holiday</span>
         </div>
       </div>
 
@@ -61,11 +102,22 @@
       <div class="card req-card">
         <div class="req-title">Request Leave</div>
 
+        <!-- Error -->
+        <div class="rf-error" v-if="formError">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14">
+            <circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>
+          </svg>
+          {{ formError }}
+        </div>
+
         <div class="rf-field">
           <label>Leave Type</label>
           <div class="rf-select-wrap">
-            <select v-model="form.type" class="rf-select">
-              <option v-for="t in leaveTypes" :key="t">{{ t }}</option>
+            <select v-model="form.leaveTypeId" class="rf-select">
+              <option value="">Select leave type…</option>
+              <option v-for="lt in leaveTypes" :key="lt.id" :value="lt.id">
+                {{ lt.name }} ({{ availableDays(lt.id) }}d left)
+              </option>
             </select>
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"/></svg>
           </div>
@@ -74,38 +126,57 @@
         <div class="rf-row">
           <div class="rf-field">
             <label>From</label>
-            <input type="date" v-model="form.from" class="rf-input"/>
+            <input type="date" v-model="form.from" class="rf-input"
+              :min="todayStr"/>
           </div>
           <div class="rf-field">
             <label>To</label>
-            <input type="date" v-model="form.to" class="rf-input"/>
+            <input type="date" v-model="form.to" class="rf-input"
+              :min="form.from || todayStr"/>
+          </div>
+        </div>
+
+        <!-- Half-day toggle -->
+        <div class="rf-field" v-if="form.from && form.from === form.to">
+          <label>Half Day?</label>
+          <div class="rf-half-row">
+            <button
+              v-for="opt in halfDayOptions"
+              :key="opt.value"
+              class="half-btn"
+              :class="{ active: form.halfDayIndicator === opt.value }"
+              @click="form.halfDayIndicator = opt.value"
+            >{{ opt.label }}</button>
           </div>
         </div>
 
         <div class="rf-field">
-          <label>Reason (Optional)</label>
+          <label>Reason <span style="font-weight:400;text-transform:none">(optional)</span></label>
           <textarea v-model="form.reason" class="rf-textarea" placeholder="Brief explanation…" rows="3"></textarea>
+        </div>
+
+        <!-- Medical doc URL for SL -->
+        <div class="rf-field" v-if="selectedLeaveType && selectedLeaveType.requiresDoc">
+          <label>Medical Document URL <span style="color:#a03020">*</span></label>
+          <input type="url" v-model="form.medicalDocUrl" class="rf-input"
+            placeholder="https://storage.company.com/docs/cert.pdf"/>
+          <div style="font-size:11px; color:var(--stone); margin-top:4px">
+            Required for {{ selectedLeaveType.name }}
+          </div>
         </div>
 
         <div class="rf-days" v-if="daysRequested > 0">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
             <circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>
           </svg>
-          {{ daysRequested }} working day{{ daysRequested !== 1 ? 's' : '' }} requested
+          {{ form.halfDayIndicator !== 'NONE' ? '0.5' : daysRequested }}
+          working day{{ daysRequested !== 1 ? 's' : '' }} requested
         </div>
 
-        <button class="rf-submit" @click="submitRequest" :class="{ submitting }">
+        <button class="rf-submit" @click="submitRequest" :disabled="submitting">
           <span v-if="!submitting">Submit Request</span>
           <span v-else class="rf-spinner"></span>
         </button>
-
-        <!-- Success toast -->
-        <div class="rf-success" v-if="showSuccess">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
-            <polyline points="20 6 9 17 4 12"/>
-          </svg>
-          Request submitted successfully!
-        </div>
       </div>
     </div>
 
@@ -113,14 +184,28 @@
     <div class="card requests-card">
       <div class="card-head" style="margin-bottom:0">
         <div class="card-title">My Requests</div>
-        <button class="card-link">View History →</button>
+        <div style="display:flex; gap:8px;">
+          <select class="filter-select" v-model="requestStatusFilter" @change="fetchMyRequests">
+            <option value="">All Status</option>
+            <option value="PENDING">Pending</option>
+            <option value="APPROVED">Approved</option>
+            <option value="REJECTED">Rejected</option>
+            <option value="CANCELLED">Cancelled</option>
+          </select>
+        </div>
       </div>
-      <div class="req-table-wrap">
+
+      <div v-if="requestsLoading" class="loading-row">
+        <span class="spinner"></span> Loading your requests…
+      </div>
+
+      <div v-else class="req-table-wrap">
         <table class="req-table">
           <thead>
             <tr>
               <th>Leave Type</th>
               <th>Duration</th>
+              <th>Days</th>
               <th>Status</th>
               <th>Approver</th>
               <th>Actions</th>
@@ -129,18 +214,45 @@
           <tbody>
             <tr v-for="r in myRequests" :key="r.id">
               <td>
-                <span class="rt-type" :class="'rt-' + r.type.toLowerCase().replace(' ', '')">{{ r.type }}</span>
+                <span class="rt-type" :style="{ background: leaveColor(r.leaveTypeCode) + '22', color: leaveColor(r.leaveTypeCode) }">
+                  {{ r.leaveTypeName }}
+                </span>
               </td>
-              <td class="rt-dur">{{ r.duration }}</td>
-              <td><span class="rt-status" :class="'rs-' + r.status.toLowerCase()">{{ r.status }}</span></td>
+              <td class="rt-dur">
+                {{ formatDate(r.fromDate) }} – {{ formatDate(r.toDate) }}
+              </td>
               <td>
-                <div class="rt-approver">
-                  <div class="app-av" :style="{ background: r.appColor }">{{ r.appInitials }}</div>
-                  {{ r.approver }}
+                <span class="days-chip">{{ r.durationDays }}d</span>
+              </td>
+              <td>
+                <span class="rt-status" :class="'rs-' + r.status.toLowerCase()">
+                  {{ r.status }}
+                </span>
+              </td>
+              <td>
+                <div class="rt-approver" v-if="r.approverName">
+                  <div class="app-av" :style="{ background: avatarBg(r.approverName) }">
+                    {{ r.approverInitials }}
+                  </div>
+                  {{ r.approverName }}
                 </div>
+                <span v-else class="muted-text">—</span>
               </td>
               <td>
-                <button class="rt-action">···</button>
+                <button
+                  v-if="r.status === 'PENDING' || r.status === 'APPROVED'"
+                  class="rt-cancel-btn"
+                  :disabled="cancellingId === r.id"
+                  @click="cancelRequest(r.id, r.status)"
+                >
+                  {{ cancellingId === r.id ? '…' : 'Withdraw' }}
+                </button>
+                <span v-else class="muted-text">—</span>
+              </td>
+            </tr>
+            <tr v-if="myRequests.length === 0 && !requestsLoading">
+              <td colspan="6" style="text-align:center; padding:32px 0; color:var(--stone); font-size:13px;">
+                No leave requests found
               </td>
             </tr>
           </tbody>
@@ -153,107 +265,470 @@
 
 <script>
 import UserLayout from '../../components/UserLayout.vue'
+import { leaveAPI } from '../../services/api.js'
+
+// ── Leave type color map ──────────────────────────────────────────────────────
+const LEAVE_COLORS = {
+  EL:  '#657D65', SL:  '#f0a090', CL:  '#86d98b',
+  ML:  '#9c6f0c', PL:  '#757872', BL:  '#e07070',
+  COL: '#6a8faf', WFH: '#8ab4a0', LWP: '#aaaaaa',
+}
+function leaveColor(code) { return LEAVE_COLORS[code] || '#657D65' }
+
+const BAR_COLORS = ['#657D65', '#A9E9AD', '#FFCFC1', '#6a8faf', '#f0d080', '#8ab4a0']
+
+const AVATAR_BG = ['#3d5240','#657D65','#9c6f0c','#6a8faf','#a03020','#8ab4a0','#757872']
+function avatarBg(name = '') {
+  let h = 0
+  for (let i = 0; i < name.length; i++) h = name.charCodeAt(i) + ((h << 5) - h)
+  return AVATAR_BG[Math.abs(h) % AVATAR_BG.length]
+}
+function initials(name = '') {
+  return name.split(' ').map(p => p[0]).slice(0, 2).join('').toUpperCase()
+}
+
+// Build date string without UTC shift (IST safe)
+function localDateStr(date) {
+  return [
+    date.getFullYear(),
+    String(date.getMonth() + 1).padStart(2, '0'),
+    String(date.getDate()).padStart(2, '0'),
+  ].join('-')
+}
+
 export default {
-  name: 'LeaveView',
+  name: 'UserLeaveView',
   components: { UserLayout },
+
   data() {
     const today = new Date()
     return {
       today,
-      currentYear: today.getFullYear(),
+      currentYear:  today.getFullYear(),
       currentMonth: today.getMonth(),
-      selectedDate: today.toISOString().split('T')[0],
-      form: { type: 'Annual Leave', from: '', to: '', reason: '' },
-      submitting: false,
-      showSuccess: false,
-      leaveTypes: ['Annual Leave', 'Sick Leave', 'Privilege Leave', 'Maternity Leave', 'Paternity Leave', 'Unpaid Leave'],
-      balanceCards: [
-        { type: 'Annual Leave', used: 12, total: 24, featured: false, barColor: '#657D65', },
-        { type: 'Sick Leave',   used: 4,  total: 8,  featured: true,  barColor: '#A9E9AD', },
-        { type: 'Unpaid Leave', used: 2,  total: 10, featured: false, barColor: '#FFCFC1', },
-      ],
-      // Leave events on calendar: date → type
-      leaveEvents: {
-        '2026-04-10': 'annual',
-        '2026-04-11': 'annual',
-        '2026-04-15': 'other',
+      todayStr:     localDateStr(today),
+
+      // ── UI state ──────────────────────────────────────────────────────────
+      balancesLoading:  true,
+      requestsLoading:  false,
+      submitting:       false,
+      cancellingId:     null,
+      formError:        '',
+      toast:            { show: false, message: '', type: 'success' },
+      requestStatusFilter: '',
+
+      // ── Data from backend ─────────────────────────────────────────────────
+      balances:    [],    // raw balance rows from API
+      leaveTypes:  [],    // all active leave types
+      myRequests:  [],    // my leave requests
+      holidays:    [],    // holidays for current month (from calendar API)
+
+      // ── Form ──────────────────────────────────────────────────────────────
+      form: {
+        leaveTypeId:      '',
+        from:             '',
+        to:               '',
+        reason:           '',
+        medicalDocUrl:    '',
+        halfDayIndicator: 'NONE',
       },
-      myRequests: [
-        { id: 1, type: 'Annual Leave', duration: 'Sep 05 – Sep 06 (2 Days)', status: 'Approved',  approver: 'Alex Morgan', appInitials: 'AM', appColor: '#A9E9AD' },
-        { id: 2, type: 'Sick Leave',   duration: 'Aug 12 – Aug 12 (1 Day)',  status: 'Completed', approver: 'Sarah Kim',   appInitials: 'SK', appColor: '#657D65' },
-        { id: 3, type: 'Annual Leave', duration: 'Oct 20 – Oct 25 (5 Days)', status: 'Pending',   approver: 'Alex Morgan', appInitials: 'AM', appColor: '#A9E9AD' },
-      ]
+
+      halfDayOptions: [
+        { value: 'NONE',   label: 'Full Day'   },
+        { value: 'FIRST',  label: 'First Half'  },
+        { value: 'SECOND', label: 'Second Half' },
+      ],
     }
   },
-  computed: {
-    monthLabel() {
-      return new Date(this.currentYear, this.currentMonth).toLocaleDateString('en-IN', { month: 'long', year: 'numeric' })
+
+  async mounted() {
+    await Promise.all([
+      this.fetchLeaveTypes(),
+      this.fetchMyBalances(),
+      this.fetchMyRequests(),
+      this.fetchHolidays(),
+    ])
+  },
+
+  watch: {
+    // Reset halfDay when date range changes to multi-day
+    'form.from'(v) {
+      if (v !== this.form.to) this.form.halfDayIndicator = 'NONE'
     },
+    'form.to'(v) {
+      if (v !== this.form.from) this.form.halfDayIndicator = 'NONE'
+    },
+    // Refetch holidays when month changes
+    currentMonth() { this.fetchHolidays() },
+    currentYear()  { this.fetchHolidays() },
+  },
+
+  computed: {
+    // ── Month label ────────────────────────────────────────────────────────
+    monthLabel() {
+      return new Date(this.currentYear, this.currentMonth)
+        .toLocaleDateString('en-IN', { month: 'long', year: 'numeric' })
+    },
+
+    // ── Balance cards from real data ───────────────────────────────────────
+    balanceCards() {
+      return this.balances
+        .filter(b => b.leaveType?.code !== 'LWP' && b.leaveType?.code !== 'WFH') // hide unlimited
+        .map((b, i) => ({
+          leaveTypeId: b.leaveType?.id,
+          code:        b.leaveType?.code || '',
+          name:        b.leaveType?.name || '',
+          used:        b.used,
+          total:       b.openingBalance + b.accrued + b.carryForwarded,
+          remaining:   b.closingBalance,
+          barColor:    BAR_COLORS[i % BAR_COLORS.length],
+        }))
+    },
+
+    // ── Selected leave type object ─────────────────────────────────────────
+    selectedLeaveType() {
+      return this.leaveTypes.find(lt => lt.id === parseInt(this.form.leaveTypeId)) || null
+    },
+
+    // ── Calendar cells ─────────────────────────────────────────────────────
     calCells() {
-      const firstDay = new Date(this.currentYear, this.currentMonth, 1).getDay()
+      const firstDay    = new Date(this.currentYear, this.currentMonth, 1).getDay()
       const daysInMonth = new Date(this.currentYear, this.currentMonth + 1, 0).getDate()
       const daysInPrev  = new Date(this.currentYear, this.currentMonth, 0).getDate()
-      const todayStr = this.today.toISOString().split('T')[0]
-      const cells = []
+      const cells       = []
+
+      // Build a quick lookup: date → leave status
+      const leaveMap = {}
+      this.myRequests.forEach(r => {
+        if (!['PENDING', 'APPROVED'].includes(r.status)) return
+        const from   = new Date(r.fromDate)
+        const to     = new Date(r.toDate)
+        const cursor = new Date(from)
+        while (cursor <= to) {
+          leaveMap[localDateStr(cursor)] = r.status
+          cursor.setDate(cursor.getDate() + 1)
+        }
+      })
+
+      // Holiday set
+      const holidaySet = new Set(this.holidays.map(h => h.date?.split('T')[0]))
+
+      // Prev month filler
       for (let i = firstDay - 1; i >= 0; i--) {
-        cells.push({ day: daysInPrev - i, currentMonth: false, date: '', isToday: false, leaveType: null })
+        cells.push({ day: daysInPrev - i, currentMonth: false, date: '', isToday: false, leaveStatus: null, isHoliday: false })
       }
+
+      // Current month days
       for (let d = 1; d <= daysInMonth; d++) {
-        const dt = new Date(this.currentYear, this.currentMonth, d)
-        const dateStr = dt.toISOString().split('T')[0]
-        cells.push({ day: d, currentMonth: true, date: dateStr, isToday: dateStr === todayStr, leaveType: this.leaveEvents[dateStr] || null })
+        const dt      = new Date(this.currentYear, this.currentMonth, d)
+        const dateStr = localDateStr(dt)
+        cells.push({
+          day:          d,
+          currentMonth: true,
+          date:         dateStr,
+          isToday:      dateStr === this.todayStr,
+          leaveStatus:  leaveMap[dateStr] || null,
+          isHoliday:    holidaySet.has(dateStr),
+        })
       }
-      while (cells.length < 42) cells.push({ day: cells.length - firstDay - daysInMonth + 1, currentMonth: false, date: '', isToday: false, leaveType: null })
+
+      // Next month filler
+      while (cells.length < 42) {
+        cells.push({ day: cells.length - firstDay - daysInMonth + 1, currentMonth: false, date: '', isToday: false, leaveStatus: null, isHoliday: false })
+      }
+
       return cells
     },
+
+    // ── Working days calculation (excludes Sundays + holidays) ─────────────
     daysRequested() {
       if (!this.form.from || !this.form.to) return 0
       const from = new Date(this.form.from)
       const to   = new Date(this.form.to)
       if (to < from) return 0
+
+      const holidaySet = new Set(this.holidays.map(h => h.date?.split('T')[0]))
       let count = 0
-      for (let d = new Date(from); d <= to; d.setDate(d.getDate() + 1)) {
-        const day = d.getDay()
-        if (day !== 0 && day !== 6) count++
+      const cursor = new Date(from)
+      while (cursor <= to) {
+        const dow     = cursor.getDay()
+        const dateStr = localDateStr(cursor)
+        if (dow !== 0 && !holidaySet.has(dateStr)) count++
+        cursor.setDate(cursor.getDate() + 1)
       }
       return count
-    }
+    },
   },
+
   methods: {
-    prevMonth() { if (this.currentMonth === 0) { this.currentMonth = 11; this.currentYear-- } else this.currentMonth-- },
-    nextMonth() { if (this.currentMonth === 11) { this.currentMonth = 0; this.currentYear++ } else this.currentMonth++ },
+    // ── FETCH ─────────────────────────────────────────────────────────────────
+
+    async fetchLeaveTypes() {
+      try {
+        const res       = await leaveAPI.getLeaveTypes()
+        this.leaveTypes = res.data?.leaveTypes || []
+        // Set default selection to first type
+        if (this.leaveTypes.length && !this.form.leaveTypeId) {
+          this.form.leaveTypeId = this.leaveTypes[0].id
+        }
+      } catch (err) {
+        console.warn('[fetchLeaveTypes]', err)
+      }
+    },
+
+    async fetchMyBalances() {
+      this.balancesLoading = true
+      try {
+        const year = new Date().getFullYear()
+        const res  = await leaveAPI.getMyBalances({ year })
+        this.balances = res.data?.balances || []
+      } catch (err) {
+        console.warn('[fetchMyBalances]', err)
+        this.balances = []
+      } finally {
+        this.balancesLoading = false
+      }
+    },
+
+    async fetchMyRequests() {
+      this.requestsLoading = true
+      try {
+        const params = {
+          year:  new Date().getFullYear(),
+          limit: 50,
+          ...(this.requestStatusFilter ? { status: this.requestStatusFilter } : {}),
+        }
+        const res = await leaveAPI.getMyRequests(params)
+
+        this.myRequests = (res.data?.requests || []).map(r => {
+          // Find L1 approver from approvals array
+          const l1 = r.approvals?.find(a => a.level === 1)
+          const approverName = l1?.approver
+            ? `${l1.approver.firstName} ${l1.approver.lastName}`
+            : null
+
+          return {
+            id:             r.id,
+            leaveTypeCode:  r.leaveType?.code  || '',
+            leaveTypeName:  r.leaveType?.name  || '',
+            fromDate:       r.fromDate,
+            toDate:         r.toDate,
+            durationDays:   parseFloat(r.durationDays || 0),
+            status:         r.status,
+            reason:         r.reason || '',
+            approverName,
+            approverInitials: approverName ? initials(approverName) : '',
+          }
+        })
+      } catch (err) {
+        console.warn('[fetchMyRequests]', err)
+        this.myRequests = []
+      } finally {
+        this.requestsLoading = false
+      }
+    },
+
+    async fetchHolidays() {
+      try {
+        // Use calendar holidays endpoint
+        const year  = this.currentYear
+        const month = this.currentMonth + 1
+        const res   = await import('../../api/api.js').then(m =>
+          m.calendarAPI.getHolidays({ year, month })
+        )
+        this.holidays = res.data?.holidays || []
+      } catch (err) {
+        // Silently fail — holidays are optional for display
+        console.warn('[fetchHolidays]', err)
+        this.holidays = []
+      }
+    },
+
+    // ── SUBMIT LEAVE REQUEST ──────────────────────────────────────────────────
     async submitRequest() {
-      if (!this.form.from || !this.form.to) return
+      this.formError = ''
+
+      // Validation
+      if (!this.form.leaveTypeId) {
+        this.formError = 'Please select a leave type'
+        return
+      }
+      if (!this.form.from || !this.form.to) {
+        this.formError = 'Please select from and to dates'
+        return
+      }
+      if (new Date(this.form.to) < new Date(this.form.from)) {
+        this.formError = '"To" date must be on or after "From" date'
+        return
+      }
+      if (this.daysRequested === 0 && this.form.halfDayIndicator === 'NONE') {
+        this.formError = 'No working days in the selected range'
+        return
+      }
+      if (this.selectedLeaveType?.requiresDoc && !this.form.medicalDocUrl) {
+        this.formError = `Medical document URL is required for ${this.selectedLeaveType.name}`
+        return
+      }
+
       this.submitting = true
-      await new Promise(r => setTimeout(r, 900))
-      this.submitting = false
-      this.showSuccess = true
-      this.myRequests.unshift({ id: Date.now(), type: this.form.type, duration: `${this.form.from} – ${this.form.to} (${this.daysRequested} Days)`, status: 'Pending', approver: 'Alex Morgan', appInitials: 'AM', appColor: '#A9E9AD' })
-      this.form = { type: 'Annual Leave', from: '', to: '', reason: '' }
-      setTimeout(() => { this.showSuccess = false }, 3000)
-    }
-  }
+      try {
+        await leaveAPI.applyLeave({
+          leaveTypeId:      parseInt(this.form.leaveTypeId),
+          fromDate:         this.form.from,
+          toDate:           this.form.to,
+          reason:           this.form.reason   || null,
+          medicalDocUrl:    this.form.medicalDocUrl || null,
+          halfDayIndicator: this.form.halfDayIndicator,
+        })
+
+        // Reset form
+        this.form = {
+          leaveTypeId:      this.leaveTypes[0]?.id || '',
+          from:             '',
+          to:               '',
+          reason:           '',
+          medicalDocUrl:    '',
+          halfDayIndicator: 'NONE',
+        }
+
+        // Refresh data
+        await Promise.all([
+          this.fetchMyBalances(),
+          this.fetchMyRequests(),
+        ])
+
+        this.showToast('Leave request submitted successfully!', 'success')
+      } catch (err) {
+        const msg = err?.response?.data?.error || 'Failed to submit leave request'
+        this.formError = msg
+        this.showToast(msg, 'error')
+      } finally {
+        this.submitting = false
+      }
+    },
+
+    // ── CANCEL / WITHDRAW REQUEST ─────────────────────────────────────────────
+    async cancelRequest(id, currentStatus) {
+      const label = currentStatus === 'PENDING' ? 'withdraw' : 'cancel'
+      if (!confirm(`Are you sure you want to ${label} this leave request?`)) return
+
+      this.cancellingId = id
+      try {
+        await leaveAPI.cancelRequest(id, { cancelReason: 'Withdrawn by employee' })
+        await Promise.all([
+          this.fetchMyBalances(),
+          this.fetchMyRequests(),
+        ])
+        this.showToast('Leave request withdrawn successfully', 'success')
+      } catch (err) {
+        this.showToast(err?.response?.data?.error || 'Failed to withdraw request', 'error')
+      } finally {
+        this.cancellingId = null
+      }
+    },
+
+    // ── CALENDAR CLICK — click-to-select date range ────────────────────────
+    handleCellClick(cell) {
+      if (!cell.currentMonth || !cell.date) return
+      if (!this.form.from || (this.form.from && this.form.to)) {
+        // Start new selection
+        this.form.from = cell.date
+        this.form.to   = cell.date
+      } else {
+        // Extend to end date
+        if (cell.date >= this.form.from) {
+          this.form.to = cell.date
+        } else {
+          this.form.from = cell.date
+          this.form.to   = cell.date
+        }
+      }
+    },
+
+    isInRange(date) {
+      if (!date || !this.form.from || !this.form.to) return false
+      return date > this.form.from && date < this.form.to
+    },
+
+    // ── HELPERS ───────────────────────────────────────────────────────────────
+    leaveColor(code)   { return leaveColor(code) },
+    avatarBg(name)     { return avatarBg(name) },
+
+    prevMonth() {
+      if (this.currentMonth === 0) { this.currentMonth = 11; this.currentYear-- }
+      else this.currentMonth--
+    },
+    nextMonth() {
+      if (this.currentMonth === 11) { this.currentMonth = 0; this.currentYear++ }
+      else this.currentMonth++
+    },
+
+    formatDate(raw) {
+      if (!raw) return '—'
+      const dateStr = raw.split('T')[0]
+      const [y, m, d] = dateStr.split('-')
+      return new Date(+y, +m - 1, +d)
+        .toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })
+    },
+
+    availableDays(leaveTypeId) {
+      const bal = this.balances.find(b => b.leaveType?.id === leaveTypeId)
+      if (!bal) return '?'
+      return bal.closingBalance?.toFixed(1) ?? '?'
+    },
+
+    showToast(message, type = 'success') {
+      this.toast = { show: true, message, type }
+      setTimeout(() => { this.toast.show = false }, 3500)
+    },
+  },
 }
 </script>
 
 <style scoped>
+/* ── Toast ─────────────────────────────────────────────────────────────────── */
+.toast-notif {
+  position: fixed; bottom: 28px; right: 28px; z-index: 9999;
+  display: flex; align-items: center; gap: 10px;
+  padding: 13px 20px; border-radius: 12px;
+  font-size: 13px; font-weight: 600;
+  font-family: var(--font-sans); box-shadow: 0 8px 32px rgba(0,0,0,.14);
+}
+.toast-notif.success { background: #1a2e1a; color: #a8e6b0; }
+.toast-notif.error   { background: #3a1212; color: #ffcfc1; }
+.toast-enter-active  { animation: toastIn .25s ease; }
+.toast-leave-active  { animation: toastIn .2s ease reverse; }
+@keyframes toastIn { from { opacity:0; transform:translateY(12px); } to { opacity:1; transform:none; } }
+
+/* ── Shimmer ────────────────────────────────────────────────────────────────── */
+.shimmer {
+  background: linear-gradient(90deg, #f0f0ee 25%, #e8ece4 50%, #f0f0ee 75%);
+  background-size: 200% 100%;
+  animation: shimmer 1.2s infinite;
+  min-height: 120px;
+}
+@keyframes shimmer { 0%{background-position:200% 0} 100%{background-position:-200% 0} }
+
+/* ── Cards shared ───────────────────────────────────────────────────────────── */
 .card { background: #fff; border-radius: var(--r-xl); padding: 24px; border: 1px solid #e8ece4; }
 .card-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 20px; }
 .card-title { font-family: var(--font-serif); font-size: 17px; color: #1e261f; }
-.card-link  { font-size: 12.5px; color: var(--forest); font-weight: 600; background: none; border: none; cursor: pointer; }
 
-/* Balance row */
-.balance-row { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; margin-bottom: 20px; }
+/* ── Balance row ───────────────────────────────────────────────────────────── */
+.balance-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; margin-bottom: 20px; }
+@media (max-width:900px) { .balance-row { grid-template-columns: repeat(2,1fr); } }
+@media (max-width:540px) { .balance-row { grid-template-columns: 1fr; } }
+
 .bal-card {
-  background: #fff; border: 1px solid #e8ece4; border-radius: var(--r-xl);
-  padding: 22px 24px;
+  background: #fff; border: 1px solid #e8ece4; border-radius: var(--r-xl); padding: 22px 24px;
 }
 .bal-featured { background: #3d5240; border-color: #3d5240; }
-.bal-featured .bal-type { color: rgba(255,255,255,.5); }
-.bal-featured .bal-num  { color: var(--mint); }
+.bal-featured .bal-type  { color: rgba(255,255,255,.5); }
+.bal-featured .bal-num   { color: #a8e6b0; }
 .bal-featured .bal-total { color: rgba(255,255,255,.4); }
-.bal-featured .bal-rem  { color: rgba(255,255,255,.4); }
+.bal-featured .bal-rem   { color: rgba(255,255,255,.4); }
 .bal-featured .bal-bar-wrap { background: rgba(255,255,255,.1); }
+.bal-empty { grid-column: 1/-1; text-align:center; padding:24px; font-size:13px; color:var(--stone); }
 
 .bal-type  { font-size: 10.5px; font-weight: 700; text-transform: uppercase; letter-spacing: 1.2px; color: var(--stone); margin-bottom: 10px; }
 .bal-num   { font-family: var(--font-serif); font-size: 38px; color: #1e261f; line-height: 1; }
@@ -262,11 +737,11 @@ export default {
 .bal-bar  { height: 100%; border-radius: 4px; transition: width .5s ease; }
 .bal-rem  { font-size: 11.5px; color: var(--stone); }
 
-/* Main grid */
+/* ── Main grid ──────────────────────────────────────────────────────────────── */
 .leave-main { display: grid; grid-template-columns: 1fr 320px; gap: 20px; margin-bottom: 20px; }
+@media (max-width:820px) { .leave-main { grid-template-columns: 1fr; } }
 
-/* Calendar */
-.cal-card { }
+/* ── Calendar ───────────────────────────────────────────────────────────────── */
 .cal-nav { display: flex; align-items: center; gap: 12px; }
 .cn-btn {
   width: 28px; height: 28px; border: 1px solid #e4e8e0; background: #fff;
@@ -274,103 +749,123 @@ export default {
   cursor: pointer; transition: background .15s;
 }
 .cn-btn:hover { background: #f0f5f0; }
-.cn-btn svg { width: 14px; height: 14px; color: var(--forest); }
-.cal-month { font-family: var(--font-serif); font-size: 18px; color: #1e261f; }
+.cn-btn svg   { width: 14px; height: 14px; color: var(--forest); }
+.cal-month    { font-family: var(--font-serif); font-size: 18px; color: #1e261f; }
 
-.cal-days { display: grid; grid-template-columns: repeat(7, 1fr); gap: 0; margin-bottom: 4px; }
+.cal-days { display: grid; grid-template-columns: repeat(7,1fr); margin-bottom: 4px; }
 .cal-dl   { text-align: center; font-size: 10px; font-weight: 700; color: #b0b5ae; padding: 8px 0; letter-spacing: .5px; }
 
-.cal-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 2px; margin-bottom: 16px; }
+.cal-grid { display: grid; grid-template-columns: repeat(7,1fr); gap: 2px; margin-bottom: 16px; }
 .cal-cell {
   display: flex; flex-direction: column; align-items: center; justify-content: center;
-  aspect-ratio: 1; border-radius: var(--r-sm); cursor: pointer; transition: background .15s;
-  position: relative; gap: 2px;
+  aspect-ratio: 1; border-radius: var(--r-sm); cursor: pointer;
+  transition: background .15s; position: relative; gap: 2px;
 }
 .cal-cell:hover:not(.other) { background: #f0f5f0; }
-.cal-cell.other   .cell-num { color: #d0d4ce; }
-.cal-cell.today   { background: var(--forest-dk); }
-.cal-cell.today   .cell-num { color: #fff; }
-.cal-cell.selected:not(.today) { background: rgba(169,233,173,.3); }
-.cal-cell.has-leave:not(.today) { }
+.cal-cell.other   .cell-num { color: #d0d4ce; cursor: default; }
+.cal-cell.today               { background: #3d5240; }
+.cal-cell.today   .cell-num   { color: #fff; font-weight: 700; }
+.cal-cell.selected:not(.today){ background: rgba(169,233,173,.4); outline: 2px solid #657D65; outline-offset: -1px; }
+.cal-cell.in-range:not(.today){ background: rgba(169,233,173,.15); }
 .cell-num { font-size: 13px; font-weight: 500; color: #1e261f; line-height: 1; }
 .cell-leave-dot { width: 5px; height: 5px; border-radius: 50%; }
-.dot-annual { background: var(--forest); }
-.dot-sick   { background: var(--peach); }
-.dot-other  { background: var(--stone); }
+.dot-annual { background: #657D65; }
+.dot-other  { background: #f0a090; }
 
-.cal-legend { display: flex; gap: 16px; }
+.cal-legend { display: flex; gap: 16px; flex-wrap: wrap; }
 .cl-item { display: flex; align-items: center; gap: 5px; font-size: 11px; color: var(--stone); }
 .cl-dot  { width: 8px; height: 8px; border-radius: 50%; }
-.cl-dot.annual { background: var(--forest); }
-.cl-dot.sick   { background: var(--peach); }
-.cl-dot.other  { background: var(--stone); }
+.cl-dot.annual  { background: #657D65; }
+.cl-dot.other   { background: #f0a090; }
+.cl-dot.holiday { background: #9c6f0c; }
 
-/* Request form */
-.req-card { }
+/* ── Request form ───────────────────────────────────────────────────────────── */
 .req-title { font-family: var(--font-serif); font-size: 20px; color: #1e261f; margin-bottom: 22px; }
 
-.rf-field { margin-bottom: 18px; }
-.rf-field label { display: block; font-size: 10.5px; font-weight: 700; letter-spacing: .8px; text-transform: uppercase; color: var(--stone); margin-bottom: 8px; }
+.rf-error {
+  display: flex; align-items: center; gap: 8px; margin-bottom: 14px;
+  background: rgba(255,207,193,.2); border: 1px solid rgba(255,150,130,.4);
+  border-radius: 8px; padding: 10px 14px; font-size: 12px; color: #8a3525;
+}
 
+.rf-field { margin-bottom: 18px; }
+.rf-field label {
+  display: block; font-size: 10.5px; font-weight: 700; letter-spacing: .8px;
+  text-transform: uppercase; color: var(--stone); margin-bottom: 8px;
+}
 .rf-select-wrap { position: relative; }
 .rf-select {
-  width: 100%; appearance: none;
-  background: #fff; border: 1.5px solid #dde3da; border-radius: var(--r-sm);
-  padding: 10px 36px 10px 14px; font-size: 13.5px; font-family: var(--font-sans);
-  color: #1e261f; outline: none; cursor: pointer; transition: border-color .18s;
+  width: 100%; appearance: none; background: #fff; border: 1.5px solid #dde3da;
+  border-radius: var(--r-sm); padding: 10px 36px 10px 14px;
+  font-size: 13.5px; font-family: var(--font-sans); color: #1e261f;
+  outline: none; cursor: pointer; transition: border-color .18s;
 }
-.rf-select:focus { border-color: var(--mint); }
-.rf-select-wrap svg { position: absolute; right: 12px; top: 50%; transform: translateY(-50%); width: 14px; height: 14px; color: var(--stone); pointer-events: none; }
-
+.rf-select:focus { border-color: #86d98b; }
+.rf-select-wrap svg {
+  position: absolute; right: 12px; top: 50%; transform: translateY(-50%);
+  width: 14px; height: 14px; color: var(--stone); pointer-events: none;
+}
 .rf-input {
-  width: 100%; background: #fff; border: 1.5px solid #dde3da; border-radius: var(--r-sm);
-  padding: 10px 14px; font-size: 13.5px; font-family: var(--font-sans); color: #1e261f; outline: none;
-  transition: border-color .18s;
+  width: 100%; background: #fff; border: 1.5px solid #dde3da;
+  border-radius: var(--r-sm); padding: 10px 14px;
+  font-size: 13.5px; font-family: var(--font-sans); color: #1e261f;
+  outline: none; transition: border-color .18s;
 }
-.rf-input:focus { border-color: var(--mint); }
-
+.rf-input:focus { border-color: #86d98b; }
 .rf-row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
-
 .rf-textarea {
-  width: 100%; background: #fff; border: 1.5px solid #dde3da; border-radius: var(--r-sm);
-  padding: 10px 14px; font-size: 13px; font-family: var(--font-sans); color: #1e261f; outline: none;
-  resize: vertical; transition: border-color .18s; min-height: 80px;
+  width: 100%; background: #fff; border: 1.5px solid #dde3da;
+  border-radius: var(--r-sm); padding: 10px 14px;
+  font-size: 13px; font-family: var(--font-sans); color: #1e261f;
+  outline: none; resize: vertical; transition: border-color .18s; min-height: 80px;
 }
-.rf-textarea:focus { border-color: var(--mint); }
+.rf-textarea:focus { border-color: #86d98b; }
 .rf-textarea::placeholder { color: #b8bdb6; }
+
+/* Half-day toggle */
+.rf-half-row { display: flex; gap: 8px; }
+.half-btn {
+  flex: 1; padding: 8px; border: 1.5px solid #dde3da; border-radius: var(--r-sm);
+  background: #fff; font-size: 12px; font-weight: 500; color: var(--stone);
+  cursor: pointer; transition: all .15s; font-family: var(--font-sans);
+}
+.half-btn.active { background: #3d5240; color: #fff; border-color: #3d5240; }
 
 .rf-days {
   display: flex; align-items: center; gap: 8px;
   background: rgba(169,233,173,.2); border-radius: var(--r-sm); padding: 10px 14px;
-  font-size: 13px; color: var(--forest-dk); font-weight: 600; margin-bottom: 18px;
+  font-size: 13px; color: #2d5c32; font-weight: 600; margin-bottom: 18px;
 }
-.rf-days svg { width: 14px; height: 14px; flex-shrink: 0; color: var(--forest); }
+.rf-days svg { width: 14px; height: 14px; flex-shrink: 0; color: #657D65; }
 
 .rf-submit {
-  width: 100%; padding: 13px; background: var(--forest-dk); color: #fff;
+  width: 100%; padding: 13px; background: #3d5240; color: #fff;
   border: none; border-radius: var(--r-sm); font-size: 14px; font-weight: 600;
   font-family: var(--font-sans); cursor: pointer; transition: background .18s;
   display: flex; align-items: center; justify-content: center; min-height: 48px;
 }
-.rf-submit:hover:not(.submitting) { background: var(--forest); }
+.rf-submit:hover:not(:disabled) { background: #657D65; }
+.rf-submit:disabled { opacity: .6; cursor: not-allowed; }
 .rf-spinner {
   width: 18px; height: 18px; border: 2px solid rgba(255,255,255,.3);
   border-top-color: #fff; border-radius: 50%; animation: spin .7s linear infinite;
 }
 @keyframes spin { to { transform: rotate(360deg); } }
 
-.rf-success {
-  display: flex; align-items: center; gap: 8px; margin-top: 12px;
-  background: rgba(169,233,173,.25); border: 1px solid rgba(169,233,173,.5);
-  border-radius: var(--r-sm); padding: 10px 14px;
-  font-size: 13px; font-weight: 600; color: #2d5c32;
-  animation: fadeIn .3s ease;
+/* ── My Requests table ──────────────────────────────────────────────────────── */
+.filter-select {
+  border: 1px solid #e4e8e0; background: #fff; border-radius: var(--r-sm);
+  padding: 6px 12px; font-size: 12.5px; font-family: var(--font-sans);
+  color: #1e261f; outline: none; cursor: pointer;
 }
-@keyframes fadeIn { from { opacity: 0; transform: translateY(-4px); } to { opacity: 1; transform: none; } }
-.rf-success svg { width: 14px; height: 14px; flex-shrink: 0; }
 
-/* Requests table */
-.requests-card { }
+.loading-row { display: flex; align-items: center; gap: 10px; padding: 32px; color: var(--stone); font-size: 13px; }
+.spinner {
+  display: inline-block; width: 16px; height: 16px;
+  border: 2px solid #e8ece4; border-top-color: #657D65;
+  border-radius: 50%; animation: spin .65s linear infinite;
+}
+
 .req-table-wrap { overflow-x: auto; margin-top: 16px; }
 .req-table { width: 100%; border-collapse: collapse; }
 .req-table thead th {
@@ -383,26 +878,39 @@ export default {
 .req-table tbody tr:hover { background: #f8faf8; }
 .req-table td { padding: 14px 18px; }
 
-.rt-type { font-size: 12px; font-weight: 600; padding: 3px 11px; border-radius: 20px; }
-.rt-annualleave { background: rgba(169,233,173,.3); color: #2d5c32; }
-.rt-sickleave   { background: rgba(255,207,193,.4); color: #8a3525; }
+.rt-type {
+  font-size: 12px; font-weight: 600; padding: 3px 11px; border-radius: 20px;
+}
 .rt-dur { font-size: 13px; color: #4a5a4b; }
+
+.days-chip {
+  background: #f0f0ee; color: var(--stone);
+  font-size: 11.5px; font-weight: 700; padding: 2px 9px; border-radius: 20px;
+}
 
 .rt-status { font-size: 11.5px; font-weight: 700; padding: 4px 11px; border-radius: 20px; }
 .rs-approved  { background: rgba(169,233,173,.3); color: #2d5c32; }
 .rs-pending   { background: rgba(255,207,193,.35); color: #8a3525; }
-.rs-completed { background: #f0f0ee; color: var(--stone); }
+.rs-rejected  { background: rgba(255,207,193,.35); color: #8a3525; }
+.rs-cancelled { background: #f0f0ee; color: var(--stone); }
+.rs-withdrawn { background: #f0f0ee; color: var(--stone); }
 
-.rt-approver { display: flex; align-items: center; gap: 8px; font-size: 13px; color: #4a5a4b; }
+.rt-approver {
+  display: flex; align-items: center; gap: 8px;
+  font-size: 13px; color: #4a5a4b;
+}
 .app-av {
   width: 26px; height: 26px; border-radius: 50%;
   display: flex; align-items: center; justify-content: center;
-  font-size: 10px; font-weight: 700; color: var(--forest-dk); flex-shrink: 0;
+  font-size: 10px; font-weight: 700; color: #fff; flex-shrink: 0;
 }
-.rt-action {
-  background: none; border: 1px solid #e4e8e0; border-radius: var(--r-sm);
-  padding: 4px 12px; font-size: 14px; color: var(--stone); cursor: pointer;
-  font-family: var(--font-sans); transition: background .15s; letter-spacing: 1px;
+.muted-text { color: #b0b5ae; font-size: 12px; }
+
+.rt-cancel-btn {
+  padding: 5px 12px; border: 1px solid #e4e8e0; border-radius: var(--r-xs);
+  background: #fff; font-size: 11.5px; font-weight: 600; color: #8a3525;
+  cursor: pointer; font-family: var(--font-sans); transition: all .15s;
 }
-.rt-action:hover { background: #f0f5f0; }
+.rt-cancel-btn:hover:not(:disabled) { background: rgba(255,207,193,.25); border-color: #ffcfc1; }
+.rt-cancel-btn:disabled { opacity: .5; cursor: not-allowed; }
 </style>

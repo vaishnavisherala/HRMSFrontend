@@ -36,13 +36,27 @@
             <input type="text" v-model="search" placeholder="Search by name or department…">
           </div>
           <select class="fselect" v-model="typeFilter">
-            <option value="">All Leave Types</option>
-            <option v-for="lt in leaveTypes" :key="lt">{{ lt }}</option>
-          </select>
+  <option value="">All Leave Types</option>
+
+  <option
+    v-for="lt in leaveTypeOptions"
+    :key="lt.id"
+    :value="lt.code"
+  >
+    {{ lt.name }}
+  </option>
+</select>
           <select class="fselect" v-model="deptFilter">
-            <option value="">All Departments</option>
-            <option v-for="d in departments" :key="d">{{ d }}</option>
-          </select>
+  <option value="">All Departments</option>
+
+  <option
+    v-for="d in departmentOptions"
+    :key="d"
+    :value="d"
+  >
+    {{ d }}
+  </option>
+</select>
         </div>
 
         <!-- Table -->
@@ -59,7 +73,7 @@
             </tr>
           </thead>
           <tbody>
-            <tr v-for="req in filtered" :key="req.id" @click="selectedRequest = req" :class="{ selected: selectedRequest && selectedRequest.id === req.id }">
+            <tr v-for="req in filteredRequests" :key="req.id" @click="selectedRequest = req" :class="{ selected: selectedRequest && selectedRequest.id === req.id }">
               <td>
                 <div class="emp-cell">
                   <div class="emp-av" :style="{ background: req.color }">{{ req.initials }}</div>
@@ -76,29 +90,60 @@
                 <div class="date-range">{{ req.fromDate }}</div>
                 <div class="date-to">to {{ req.toDate }}</div>
               </td>
-              <td class="tc"><span class="days-badge">{{ req.days }}d</span></td>
+              <td class="tc"><span class="days-badge">{{ req.days }}</span></td>
               <td class="tc muted">{{ req.appliedOn }}</td>
               <td><span class="status-chip" :class="statusClass(req.status)">{{ req.status }}</span></td>
               <td>
-                <div class="action-row" v-if="req.status === 'Pending'">
-                  <button class="act-approve" @click.stop="updateStatus(req.id, 'Approved')">
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg>
-                    Approve
-                  </button>
-                  <button class="act-reject" @click.stop="updateStatus(req.id, 'Rejected')">
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
-                    Reject
-                  </button>
-                </div>
-                <div v-else class="action-row">
-                  <button class="act-view" @click.stop="selectedRequest = req">
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
-                    View
-                  </button>
-                </div>
+                <div class="action-row">
+
+  <!-- Pending -->
+  <template v-if="req.status === 'PENDING'">
+
+    <!-- Approve -->
+    <button
+      class="act-icon approve"
+      @click.stop="approveRequest(req.id)"
+      title="Approve Leave"
+    >
+      ✓
+    </button>
+
+    <!-- Reject -->
+    <button
+      class="act-icon reject"
+      @click.stop="rejectRequest(req.id)"
+      title="Reject Leave"
+    >
+      ✕
+    </button>
+
+  </template>
+
+  <!-- Approved -->
+  <template v-else-if="req.status === 'APPROVED'">
+
+    <button class="act-status approved" disabled>
+      ✓ 
+    </button>
+
+  </template>
+
+  <!-- Rejected -->
+  <template v-else-if="req.status === 'REJECTED'">
+
+    <button class="act-status rejected" disabled>
+      ✕ 
+    </button>
+
+  </template>
+
+  <!-- View -->
+
+
+</div>
               </td>
             </tr>
-            <tr v-if="filtered.length === 0">
+            <tr v-if="filteredRequests.length === 0">
               <td colspan="7" class="empty-row">
                 <div class="empty-state">
                   <div class="es-icon">📋</div>
@@ -111,7 +156,7 @@
         </table>
 
         <div class="table-foot">
-          <span class="tf-info">{{ filtered.length }} of {{ requests.length }} requests</span>
+          <span class="tf-info">{{ filteredRequests.length }} of {{ requests.length }} requests</span>
           <div class="pagination">
             <button class="pg">‹</button>
             <button class="pg active">1</button>
@@ -248,95 +293,426 @@
 
 <script>
 import AdminLayout from '../components/AdminLayout.vue'
+import { leaveAPI, lookupAPI } from '../services/api.js'
+ 
+// ── Leave type color palette ──────────────────────────────────────────────────
+const LEAVE_COLORS = {
+  EL:  '#657D65',
+  SL:  '#f0a090',
+  CL:  '#86d98b',
+  ML:  '#9c6f0c',
+  PL:  '#757872',
+  BL:  '#e07070',
+  COL: '#6a8faf',
+  WFH: '#8ab4a0',
+  LWP: '#aaaaaa',
+}
+function leaveColor(code) {
+  return LEAVE_COLORS[code] || '#657D65'
+}
+
+// ── Avatar helpers ────────────────────────────────────────────────────────────
+const AVATAR_COLORS = ['#3d5240','#657D65','#9c6f0c','#6a8faf','#a03020','#8ab4a0','#757872']
+function avatarColor(name = '') {
+  let h = 0
+  for (let i = 0; i < name.length; i++) h = name.charCodeAt(i) + ((h << 5) - h)
+  return AVATAR_COLORS[Math.abs(h) % AVATAR_COLORS.length]
+}
+function initials(name = '') {
+  return name.split(' ').map(p => p[0]).slice(0, 2).join('').toUpperCase()
+}
+
+
+// ── Normalize a raw backend request → display shape ──────────────────────────
+function normalizeRequest(r) {
+
+  const fullName =
+    `${r.employee?.firstName || ''} ${r.employee?.lastName || ''}`.trim()
+
+  return {
+    id:            r.id,
+    name: fullName || 'Unknown Employee',
+    employeeName: fullName,
+    initials: initials(fullName),
+    color: avatarColor(fullName),
+    employeeCode:  r.employee?.employeeCode || '',
+    department:    r.employee?.department?.name || '—',
+    leaveTypeCode: r.leaveType?.code  || '',
+    leaveTypeName: r.leaveType?.name  || '',
+    leaveType: r.leaveType?.name || r.leaveType?.code || 'Leave',
+
+    fromDate: r.fromDate
+  ? new Date(r.fromDate).toISOString().split('T')[0]
+  : '—',
+
+toDate: r.toDate
+  ? new Date(r.toDate).toISOString().split('T')[0]
+  : '—',
+   days: parseFloat(r.durationDays || 0),
+    appliedOn: r.appliedAt
+  ? new Date(r.appliedAt).toLocaleDateString('en-IN', {
+      day: '2-digit',
+      month: 'short',
+      year: 'numeric'
+    })
+  : '—',
+    status:        r.status,
+    reason:        r.reason || '',
+    approvals:     r.approvals || [],
+  }
+}
+ 
 export default {
   name: 'LeaveView',
   components: { AdminLayout },
+ 
   data() {
     return {
-      activeTab: 'all', search: '', typeFilter: '', deptFilter: '',
-      selectedRequest: null, showPolicyModal: false,
-      tabs: [
-        { key:'all',      label:'All Requests' },
-        { key:'pending',  label:'Pending' },
-        { key:'approved', label:'Approved' },
-        { key:'rejected', label:'Rejected' },
-      ],
-      leaveTypes:  ['Casual Leave','Sick Leave','Privilege Leave','Maternity Leave','Paternity Leave','Unpaid Leave'],
-      departments: ['Engineering','Design','Marketing','Finance','HR & Admin','Sales'],
-      leaveTypeColors: {
-        'Casual Leave':    '#657D65',
-        'Sick Leave':      '#f0a090',
-        'Privilege Leave': '#86d98b',
-        'Maternity Leave': '#9c6f0c',
-        'Paternity Leave': '#757872',
-        'Unpaid Leave':    '#aaaaaa',
+      // ── State ─────────────────────────────────────────────────────────────
+      loading:        false,
+      requestsLoading: false,
+      modalLoading:   false,
+      actionLoading:  null,   // request id currently being actioned
+      toast:          { show: false, message: '', type: 'success' },
+ 
+      // ── UI ────────────────────────────────────────────────────────────────
+      activeTab:       'all',
+      search:          '',
+      typeFilter:      '',
+      deptFilter:      '',
+      currentPage:     1,
+      pageLimit:       20,
+      selectedRequest: null,
+      approvalComment: '',
+ 
+      // Modals
+      showAddLeaveTypeModal: false,
+      showPolicyModal:       false,
+      showRejectModal:       false,
+      pendingRejectId:       null,
+      rejectComment:         '',
+      modalError:            '',
+ 
+      // ── Data from backend ─────────────────────────────────────────────────
+      requests:        [],
+      leaveTypeOptions: [],
+      departmentOptions: [],
+      dashboardStats:  { pending: 0, approved: 0, rejected: 0, onLeaveToday: 0, totalRequests: 0 },
+ 
+      // ── New leave type form ───────────────────────────────────────────────
+      newLeaveType: {
+        code:             '',
+        name:             '',
+        maxDaysPerYear:   12,
+        carryForwardDays: 0,
+        encashable:       false,
+        requiresDoc:      false,
+        applicableGender: 'ALL',
+        minServiceDays:   0,
       },
-      kpis: [
-        { label:'Total Requests', value:'28', trend:'This month', cls:'badge-neu', bg:'var(--stone-dim)',         stroke:'var(--stone)',       icon:'<rect x="5" y="2" width="14" height="20" rx="2"/><line x1="9" y1="7" x2="15" y2="7"/>' },
-        { label:'Pending',        value:'7',  trend:'Needs action',cls:'badge-warn',bg:'#fef9ec',               stroke:'#9c6f0c',            icon:'<circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>' },
-        { label:'Approved',       value:'16', trend:'57%',        cls:'badge-up',   bg:'var(--mint-ghost)',      stroke:'var(--forest-deep)', icon:'<path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11"/>' },
-        { label:'Rejected',       value:'5',  trend:'18%',        cls:'badge-down', bg:'var(--peach-dim)',       stroke:'#a03020',            icon:'<circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/>' },
-        { label:'On Leave Today', value:'3',  trend:'Active',     cls:'badge-neu',  bg:'rgba(101,125,101,.1)',   stroke:'var(--forest)',      icon:'<path d="M20.84 4.61a5.5 5.5 0 00-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 00-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 000-7.78z"/>' },
-      ],
-      requests: [
-        { id:1,  name:'Priya Sharma',   initials:'PS', department:'Design',      color:'#f0a090', leaveType:'Casual Leave',    fromDate:'Apr 5',  toDate:'Apr 7',  days:3, appliedOn:'Mar 25', status:'Pending',  reason:'Personal family function.' },
-        { id:2,  name:'Arjun Kumar',    initials:'AK', department:'Finance',     color:'#757872', leaveType:'Sick Leave',      fromDate:'Apr 10', toDate:'Apr 10', days:1, appliedOn:'Mar 27', status:'Pending',  reason:'Medical appointment for routine checkup.' },
-        { id:3,  name:'Rohan Mehta',    initials:'RM', department:'Engineering', color:'#3d5240', leaveType:'Casual Leave',    fromDate:'Apr 2',  toDate:'Apr 3',  days:2, appliedOn:'Mar 20', status:'Approved', reason:'Attending a relative\'s wedding.' },
-        { id:4,  name:'Neha Patil',     initials:'NP', department:'Marketing',   color:'#86d98b', leaveType:'Privilege Leave', fromDate:'Apr 14', toDate:'Apr 15', days:2, appliedOn:'Mar 22', status:'Rejected', reason:'Planned vacation.' },
-        { id:5,  name:'Kavita Joshi',   initials:'KJ', department:'Sales',       color:'#d08080', leaveType:'Sick Leave',      fromDate:'Mar 28', toDate:'Mar 28', days:1, appliedOn:'Mar 28', status:'Approved', reason:'Fever and cold.' },
-        { id:6,  name:'Vivek Singh',    initials:'VS', department:'Engineering', color:'#4a6a4a', leaveType:'Privilege Leave', fromDate:'Apr 22', toDate:'Apr 25', days:4, appliedOn:'Mar 26', status:'Pending',  reason:'Annual family vacation.' },
-        { id:7,  name:'Sunita Rao',     initials:'SR', department:'Finance',     color:'#a0c0a0', leaveType:'Casual Leave',    fromDate:'Apr 8',  toDate:'Apr 8',  days:1, appliedOn:'Mar 24', status:'Approved', reason:'Personal work.' },
-        { id:8,  name:'Mihir Desai',    initials:'MD', department:'Marketing',   color:'#8090a0', leaveType:'Maternity Leave', fromDate:'May 1',  toDate:'Jul 31', days:90,appliedOn:'Mar 15', status:'Approved', reason:'Maternity leave as per policy.' },
-        { id:9,  name:'Deepak Nair',    initials:'DN', department:'Engineering', color:'#aaaaaa', leaveType:'Unpaid Leave',    fromDate:'Apr 18', toDate:'Apr 20', days:3, appliedOn:'Mar 28', status:'Pending',  reason:'Extended travel for personal reasons.' },
-        { id:10, name:'Ananya Rao',     initials:'AR', department:'HR & Admin',  color:'#657D65', leaveType:'Privilege Leave', fromDate:'Apr 30', toDate:'May 2',  days:3, appliedOn:'Mar 18', status:'Approved', reason:'Short trip.' },
-      ],
-      leaveBalance: [
-        { type:'Casual Leave',    used:3,  total:12, color:'#657D65' },
-        { type:'Sick Leave',      used:2,  total:10, color:'#f0a090' },
-        { type:'Privilege Leave', used:5,  total:20, color:'#86d98b' },
-        { type:'Compensatory',    used:1,  total:6,  color:'#757872' },
-      ],
-      policies: [
-        { type:'Casual Leave',    days:12, color:'#657D65', desc:'Can be availed for personal work, with min 1-day notice.' },
-        { type:'Sick Leave',      days:10, color:'#f0a090', desc:'Requires medical certificate for 3+ consecutive days.' },
-        { type:'Privilege Leave', days:20, color:'#86d98b', desc:'Planned leaves; 2 weeks notice required.' },
-        { type:'Maternity Leave', days:182,color:'#9c6f0c', desc:'As per Maternity Benefit Act, 1961.' },
-        { type:'Paternity Leave', days:15, color:'#757872', desc:'For male employees on birth/adoption of child.' },
-        { type:'Unpaid Leave',    days:0,  color:'#aaaaaa', desc:'Approved case-by-case; salary deducted.' },
+ 
+      tabs: [
+        { key: 'all',      label: 'All Requests' },
+        { key: 'pending',  label: 'Pending'       },
+        { key: 'approved', label: 'Approved'      },
+        { key: 'rejected', label: 'Rejected'      },
       ],
     }
   },
+ 
+  async mounted() {
+    await Promise.all([
+      this.fetchLeaveTypes(),
+      this.fetchDashboardSummary(),
+      this.fetchRequests(),
+      this.fetchDepartments(),
+    ])
+  },
+ 
   computed: {
-    filtered() {
+    currentYear() { return new Date().getFullYear() },
+ 
+    filteredRequests() {
       return this.requests.filter(r => {
         const matchTab    = this.activeTab === 'all' || r.status.toLowerCase() === this.activeTab
-        const matchSearch = !this.search || r.name.toLowerCase().includes(this.search.toLowerCase()) || r.department.toLowerCase().includes(this.search.toLowerCase())
-        const matchType   = !this.typeFilter || r.leaveType === this.typeFilter
+        const matchSearch = !this.search ||
+          r.employeeName.toLowerCase().includes(this.search.toLowerCase()) ||
+          r.department.toLowerCase().includes(this.search.toLowerCase())
+        const matchType   = !this.typeFilter || r.leaveTypeCode === this.typeFilter
         const matchDept   = !this.deptFilter || r.department === this.deptFilter
         return matchTab && matchSearch && matchType && matchDept
       })
     },
+ 
+    kpis() {
+      const s = this.dashboardStats
+      return [
+        {
+          label: 'Total Requests', value: s.totalRequests, trend: 'This month',
+          cls: 'badge-neu', bg: 'var(--stone-dim)', stroke: 'var(--stone)',
+          icon: '<rect x="5" y="2" width="14" height="20" rx="2"/><line x1="9" y1="7" x2="15" y2="7"/>',
+        },
+        {
+          label: 'Pending', value: s.pending, trend: 'Needs action',
+          cls: 'badge-warn', bg: '#fef9ec', stroke: '#9c6f0c',
+          icon: '<circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>',
+        },
+        {
+          label: 'Approved', value: s.approved, trend: 'This month',
+          cls: 'badge-up', bg: 'var(--mint-ghost)', stroke: 'var(--forest-deep)',
+          icon: '<path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11"/>',
+        },
+        {
+          label: 'Rejected', value: s.rejected, trend: 'This month',
+          cls: 'badge-down', bg: 'var(--peach-dim)', stroke: '#a03020',
+          icon: '<circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/>',
+        },
+        {
+          label: 'On Leave Today', value: s.onLeaveToday, trend: 'Active',
+          cls: 'badge-neu', bg: 'rgba(101,125,101,.1)', stroke: 'var(--forest)',
+          icon: '<path d="M20.84 4.61a5.5 5.5 0 00-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 00-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 000-7.78z"/>',
+        },
+      ]
+    },
+ 
     typeBreakdown() {
       const counts = {}
-      this.requests.forEach(r => { counts[r.leaveType] = (counts[r.leaveType] || 0) + 1 })
-      const max = Math.max(...Object.values(counts))
-      return Object.entries(counts).map(([type, count]) => ({
-        type, count, pct: Math.round(count/max*100), color: this.leaveTypeColors[type] || '#657D65'
+      this.requests.forEach(r => {
+        const key = r.leaveTypeName || r.leaveTypeCode
+        counts[key] = { count: (counts[key]?.count || 0) + 1, code: r.leaveTypeCode }
+      })
+      const max = Math.max(...Object.values(counts).map(v => v.count), 1)
+      return Object.entries(counts).map(([type, v]) => ({
+        type,
+        count: v.count,
+        pct:   Math.round(v.count / max * 100),
+        color: leaveColor(v.code),
       }))
     },
   },
+ 
   methods: {
+    // ── AUTH ─────────────────────────────────────────────────────────────────
+    getToken() {
+      return sessionStorage.getItem('hrms_token') || localStorage.getItem('hrms_token')
+    },
+ 
+    // ── FETCH DATA ────────────────────────────────────────────────────────────
+    async fetchLeaveTypes() {
+      try {
+        const res = await leaveAPI.getLeaveTypes()
+        this.leaveTypeOptions = res.data?.leaveTypes || []
+      } catch (err) {
+        console.warn('[fetchLeaveTypes]', err)
+      }
+    },
+ 
+    async fetchDashboardSummary() {
+      try {
+        const res = await leaveAPI.getDashboardSummary()
+        const s   = res.data?.stats || {}
+        this.dashboardStats = {
+          pending:       s.pending       || 0,
+          approved:      s.approved      || 0,
+          rejected:      s.rejected      || 0,
+          onLeaveToday:  s.onLeaveToday  || 0,
+          totalRequests: (s.pending || 0) + (s.approved || 0) + (s.rejected || 0),
+        }
+      } catch (err) {
+        console.warn('[fetchDashboardSummary]', err)
+      }
+    },
+ 
+    async fetchRequests() {
+      this.requestsLoading = true
+      try {
+        const statusMap = {
+          pending:  'PENDING',
+          approved: 'APPROVED',
+          rejected: 'REJECTED',
+        }
+        const params = {
+          page:  this.currentPage,
+          limit: this.pageLimit,
+          ...(this.activeTab !== 'all' ? { status: statusMap[this.activeTab] } : {}),
+        }
+ 
+        const res      = await leaveAPI.getAllRequests(params)
+        this.requests  = (res.data?.requests || []).map(normalizeRequest)
+      } catch (err) {
+        console.warn('[fetchRequests]', err)
+        this.requests = []
+      } finally {
+        this.requestsLoading = false
+      }
+    },
+ 
+    async fetchDepartments() {
+      try {
+        const res = await lookupAPI.getDepartments()
+        const depts = res.data?.departments || res.data || []
+        this.departmentOptions = depts.map(d => d.name).filter(Boolean)
+      } catch (err) {
+        console.warn('[fetchDepartments]', err)
+      }
+    },
+ 
+    // ── LEAVE TYPE CRUD ────────────────────────────────────────────────────────
+    openAddLeaveTypeModal() {
+      this.newLeaveType = {
+        code: '', name: '', maxDaysPerYear: 12, carryForwardDays: 0,
+        encashable: false, requiresDoc: false, applicableGender: 'ALL', minServiceDays: 0,
+      }
+      this.modalError = ''
+      this.showAddLeaveTypeModal = true
+    },
+ 
+    async createLeaveType() {
+      this.modalError = ''
+      if (!this.newLeaveType.code || !this.newLeaveType.name) {
+        this.modalError = 'Code and Name are required'
+        return
+      }
+      this.modalLoading = true
+      try {
+        await leaveAPI.createLeaveType({
+          ...this.newLeaveType,
+          code: this.newLeaveType.code.toUpperCase(),
+        })
+        await this.fetchLeaveTypes()
+        this.showAddLeaveTypeModal = false
+        this.showToast('Leave type created successfully', 'success')
+      } catch (err) {
+        this.modalError = err?.response?.data?.error || 'Failed to create leave type'
+      } finally {
+        this.modalLoading = false
+      }
+    },
+ 
+    // ── APPROVE ───────────────────────────────────────────────────────────────
+    async approveRequest(id) {
+      this.actionLoading = id
+      try {
+        await leaveAPI.approveRequest(id, {
+          action:   'APPROVED',
+          comments: this.approvalComment || undefined,
+        })
+        this.approvalComment = ''
+        await this.fetchRequests()
+        await this.fetchDashboardSummary()
+        if (this.selectedRequest?.id === id) {
+          this.selectedRequest = this.requests.find(r => r.id === id) || null
+        }
+        this.showToast('Leave approved successfully', 'success')
+      } catch (err) {
+        this.showToast(err?.response?.data?.error || 'Failed to approve', 'error')
+      } finally {
+        this.actionLoading = null
+      }
+    },
+ 
+    // ── REJECT ────────────────────────────────────────────────────────────────
+    async rejectRequest(id) {
+
+  this.actionLoading = id
+
+  try {
+
+    await leaveAPI.approveRequest(id, {
+      action: 'REJECTED',
+      comments: 'Rejected by admin'
+    })
+
+    await this.fetchRequests()
+    await this.fetchDashboardSummary()
+
+    if (this.selectedRequest?.id === id) {
+      this.selectedRequest =
+        this.requests.find(r => r.id === id) || null
+    }
+
+    this.showToast('Leave rejected successfully', 'success')
+
+  } catch (err) {
+
+    console.error(err)
+
+    this.showToast(
+      err?.response?.data?.error || 'Failed to reject leave',
+      'error'
+    )
+
+  } finally {
+
+    this.actionLoading = null
+  }
+},
+ 
+    async confirmReject() {
+      const id = this.pendingRejectId
+      this.actionLoading = id
+      try {
+        await leaveAPI.approveRequest(id, {
+          action:   'REJECTED',
+          comments: this.rejectComment || undefined,
+        })
+        this.showRejectModal = false
+        this.rejectComment   = ''
+        this.pendingRejectId = null
+        await this.fetchRequests()
+        await this.fetchDashboardSummary()
+        if (this.selectedRequest?.id === id) {
+          this.selectedRequest = this.requests.find(r => r.id === id) || null
+        }
+        this.showToast('Leave request rejected', 'success')
+      } catch (err) {
+        this.showToast(err?.response?.data?.error || 'Failed to reject', 'error')
+      } finally {
+        this.actionLoading = null
+      }
+    },
+ 
+    // ── HELPERS ───────────────────────────────────────────────────────────────
+    leaveTypeColor(code) { return leaveColor(code) },
+    avatarColor(name)    { return avatarColor(name) },
+    initials(name)       { return initials(name) },
+ 
+    formatDate(raw) {
+      if (!raw) return '—'
+      const d = new Date(raw)
+      return d.toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })
+    },
+ 
+    statusClass(s) {
+      return {
+        PENDING:   'sc-pending',
+        APPROVED:  'sc-approved',
+        REJECTED:  'sc-rejected',
+        CANCELLED: 'sc-rejected',
+        WITHDRAWN: 'sc-rejected',
+      }[s] || ''
+    },
+ 
     tabCount(key) {
       if (key === 'all') return 0
-      return this.requests.filter(r => r.status.toLowerCase() === key).length
+      const statusMap = { pending: 'PENDING', approved: 'APPROVED', rejected: 'REJECTED' }
+      return this.requests.filter(r => r.status === statusMap[key]).length
     },
-    statusClass(s) { return { 'Pending':'sc-pending', 'Approved':'sc-approved', 'Rejected':'sc-rejected' }[s] || '' },
-    leaveTypeColor(t) { return this.leaveTypeColors[t] || '#657D65' },
-    updateStatus(id, status) {
-      const req = this.requests.find(r => r.id === id)
-      if (req) { req.status = status; if (this.selectedRequest && this.selectedRequest.id === id) this.selectedRequest = { ...req } }
+ 
+    typeCount(code) {
+      return this.requests.filter(r => r.leaveTypeCode === code).length
     },
-  }
+ 
+    typeUsagePct(code) {
+      const total = this.requests.length || 1
+      return Math.round(this.typeCount(code) / total * 100)
+    },
+ 
+    showToast(message, type = 'success') {
+      this.toast = { show: true, message, type }
+      setTimeout(() => { this.toast.show = false }, 3500)
+    },
+  },
 }
 </script>
 
@@ -355,6 +731,64 @@ export default {
 .badge-neu  { background:var(--stone-dim);  color:var(--stone); }
 
 .leave-grid { display:grid; grid-template-columns:1fr 300px; gap:18px; }
+
+
+.act-icon {
+  width: 34px;
+  height: 34px;
+  border-radius: 10px;
+  border: none;
+  cursor: pointer;
+  font-size: 18px;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all .2s ease;
+}
+
+/* Approve */
+.act-icon.approve {
+  background: #e7f7eb;
+  color: #1f7a36;
+}
+
+.act-icon.approve:hover {
+  background: #c9efd4;
+  transform: scale(1.05);
+}
+
+/* Reject */
+.act-icon.reject {
+  background: #fde8e8;
+  color: #c53030;
+}
+
+.act-icon.reject:hover {
+  background: #f8caca;
+  transform: scale(1.05);
+}
+
+/* Status buttons */
+.act-status {
+  border: none;
+  border-radius: 20px;
+  padding: 7px 14px;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: default;
+}
+
+.act-status.approved {
+  background: #e7f7eb;
+  color: #1f7a36;
+}
+
+.act-status.rejected {
+  background: #fde8e8;
+  color: #c53030;
+}
+
 
 /* Requests card */
 .requests-card { overflow:hidden; }

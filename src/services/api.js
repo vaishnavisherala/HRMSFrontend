@@ -6,7 +6,7 @@ const isLocalhost =
 
 const API_BASE_URL = isLocalhost
   ? "http://localhost:3000/api"
-  : "http://10.202.32.55:3000/api";
+  : "http://10.73.160.55:3000/api"
 const apiClient = axios.create({
   baseURL: API_BASE_URL,
   timeout: 10000,
@@ -121,6 +121,65 @@ export const calendarAPI = {
   getTeamView:      (params) => apiClient.get('/calendar/team-view',      { params }),
   getUpcoming:      (params) => apiClient.get('/calendar/upcoming',        { params }),
   getAdminOverview: (params) => apiClient.get('/calendar/admin/overview',  { params }),
+}
+
+
+export const leaveAPI = {
+  // ── Leave Types ─────────────────────────────────────────────────────────────
+  // GET /api/leave/types
+  getLeaveTypes:    (params)      => apiClient.get('/leaves/types', { params }),
+ 
+  // POST /api/leave/types  (admin)
+  createLeaveType:  (data)        => apiClient.post('/leave/types', data),
+ 
+  // PUT /api/leave/types/:id  (admin)
+  updateLeaveType:  (id, data)    => apiClient.put(`/leave/types/${id}`, data),
+ 
+  // ── Balances ─────────────────────────────────────────────────────────────────
+  // GET /api/leave/balances/my?year=2026
+  getMyBalances:    (params)      => apiClient.get('/leave/balances/my', { params }),
+ 
+  // GET /api/leave/balances/:employeeCode?year=2026
+  getEmployeeBalances: (code, params) => apiClient.get(`/leave/balances/${code}`, { params }),
+ 
+  // PUT /api/leave/balances/adjust  (admin)
+  adjustBalance:    (data)        => apiClient.put('/leave/balances/adjust', data),
+ 
+  // POST /api/leave/balances/initialize-year  (admin)
+  initializeYear:   (data)        => apiClient.post('/leave/balances/initialize-year', data),
+ 
+  // ── Requests ─────────────────────────────────────────────────────────────────
+  // POST /api/leave/requests  (employee applies)
+  applyLeave:       (data)        => apiClient.post('/leaves/requests', data),
+ 
+  // GET /api/leave/requests/my?status=PENDING&year=2026
+  getMyRequests:    (params)      => apiClient.get('/leaves/requests/my', { params }),
+ 
+  // GET /api/leave/requests/pending-approvals  (manager)
+  getPendingApprovals: (params)   => apiClient.get('/leaves/requests/pending-approvals', { params }),
+ 
+  // GET /api/leave/requests?status=PENDING&page=1  (admin)
+  getAllRequests:    (params)      => apiClient.get('/leaves/requests', { params }),
+ 
+  // GET /api/leave/requests/:id
+  getRequestById:   (id)          => apiClient.get(`/leave/requests/${id}`),
+ 
+  // PUT /api/leave/requests/:id/cancel  (employee cancels own request)
+  cancelRequest:    (id, data)    => apiClient.put(`/leave/requests/${id}/cancel`, data),
+ 
+  // ── Approvals ────────────────────────────────────────────────────────────────
+  // PUT /api/leave/requests/:id/approve  body: { action: "APPROVED"|"REJECTED", comments? }
+  approveRequest:   (id, data)    => apiClient.put(`/leaves/requests/${id}/approve`, data),
+ 
+  // POST /api/leave/requests/:id/escalate  body: { nextApproverId }
+  escalateRequest:  (id, data)    => apiClient.post(`/leave/requests/${id}/escalate`, data),
+ 
+  // ── Dashboard / Reports ──────────────────────────────────────────────────────
+  // GET /api/leave/dashboard/summary  (admin)
+  getDashboardSummary: (params)   => apiClient.get('/leaves/dashboard/summary', { params }),
+ 
+  // GET /api/leave/team-calendar?from=2026-05-01&to=2026-05-31
+  getTeamCalendar:  (params)      => apiClient.get('/leave/team-calendar', { params }),
 }
 
 export const lookupAPI = {
